@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: Figtree, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: Poppins, sans-serif;
+  }
+}
+
+/* --- Frappe Gantt Modern Stil (Monday.com Benzeri) --- */
+
+/* * Ana Konteyner ve Fontlar
+ * Tailwind'deki fontlarınızı kullanmak için font-family'yi güncelleyebilirsiniz.
+ */
+.gantt .grid, .gantt .grid-header {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    border: none;
+}
+
+/* Sol taraf (Görev Listesi) Başlığı */
+.gantt .grid-header {
+    background-color: #f5f6f8; /* Modern açık gri arka plan */
+    border-bottom: 1px solid #e0e0e0;
+}
+.gantt .grid-header .grid-row-cell {
+    color: #333;
+    font-weight: 500;
+}
+
+/* Sol taraf (Görev Listesi) Gövdesi */
+.gantt .grid-body .grid-row .grid-row-cell {
+    color: #555;
+    font-size: 14px;
+    border-bottom: 1px solid #f0f0f0; /* Çok soluk ayırıcı çizgiler */
+}
+/* Görev listesindeki satırların üzerine gelince */
+.gantt .grid-body .grid-row:hover .grid-row-cell {
+    background-color: #f5f6f8;
+}
+
+/* Sağ taraf (Zaman Çizelgesi) Başlığı */
+.gantt .gantt-header {
+    background-color: #f5f6f8;
+    border-bottom: 1px solid #e0e0e0;
+}
+.gantt .gantt-header .upper-text {
+    font-weight: 500;
+    color: #333;
+}
+.gantt .gantt-header .lower-text {
+    color: #777;
+}
+
+/* Sağ taraf (Zaman Çizelgesi) Arka Plan Çizgileri */
+.gantt .grid-background .grid-row {
+    border-bottom: 1px solid #f0f0f0;
+}
+.gantt .grid-background .tick {
+    border-right: 1px solid #f0f0f0;
+}
+
+/* * Görev Çubukları (Barlar)
+ */
+.gantt .bar-wrapper {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* Progress çubuğunun arka planı (tamamlanmamış kısım) */
+.gantt .bar {
+    fill: #e9e9e9; /* Varsayılan boş çubuk rengi */
+    stroke: none;
+}
+
+/* -- Bitti (Done) Durumu -- */
+.gantt .bar-wrapper.gantt-bar-done .bar-progress {
+    fill: #00c875; /* Monday Yeşil */
+}
+
+/* -- Çalışılıyor (In Progress) Durumu -- */
+.gantt .bar-wrapper.gantt-bar-in-progress .bar-progress {
+    fill: #0073ea; /* Monday Mavi */
+}
+
+/* -- Takıldı (Stuck) Durumu -- */
+.gantt .bar-wrapper.gantt-bar-stuck .bar-progress {
+    fill: #e2445c; /* Monday Kırmızı */
+}
+
+/* -- Varsayılan Durum (Default) -- */
+.gantt .bar-wrapper.gantt-bar-default .bar-progress {
+    fill: #0073ea; /* Varsayılan olarak Mavi yap */
+}
+
+/* Çubukların üzerindeki % ilerleme yazısı */
+.gantt .bar-label {
+    fill: #fff;
+    font-size: 12px;
+    font-weight: 500;
+}
+.gantt .bar-wrapper.gantt-bar-done .bar-label {
+    fill: #333; /* Bitti ise yazıyı koyu yap (opsiyonel) */
+}
