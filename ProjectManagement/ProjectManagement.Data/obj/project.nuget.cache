@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "y5E87c2wPsY=",
+  "dgSpecHash": "0ts5T+z6c/8=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Mustafa\\source\\repos\\Projeler\\ProjectManagement\\ProjectManagement.Data\\ProjectManagement.Data.csproj",
+  "projectFilePath": "C:\\Users\\Mustafa\\Github\\GitHub\\ProjectManagement\\ProjectManagement\\ProjectManagement.Data\\ProjectManagement.Data.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Mustafa\\.nuget\\packages\\automapper\\12.0.0\\automapper.12.0.0.nupkg.sha512",
     "C:\\Users\\Mustafa\\.nuget\\packages\\automapper.extensions.microsoft.dependencyinjection\\12.0.0\\automapper.extensions.microsoft.dependencyinjection.12.0.0.nupkg.sha512",

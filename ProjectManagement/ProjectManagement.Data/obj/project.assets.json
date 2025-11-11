@@ -4805,11 +4805,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Mustafa\\source\\repos\\Projeler\\ProjectManagement\\ProjectManagement.Data\\ProjectManagement.Data.csproj",
+      "projectUniqueName": "C:\\Users\\Mustafa\\Github\\GitHub\\ProjectManagement\\ProjectManagement\\ProjectManagement.Data\\ProjectManagement.Data.csproj",
       "projectName": "ProjectManagement.Data",
-      "projectPath": "C:\\Users\\Mustafa\\source\\repos\\Projeler\\ProjectManagement\\ProjectManagement.Data\\ProjectManagement.Data.csproj",
+      "projectPath": "C:\\Users\\Mustafa\\Github\\GitHub\\ProjectManagement\\ProjectManagement\\ProjectManagement.Data\\ProjectManagement.Data.csproj",
       "packagesPath": "C:\\Users\\Mustafa\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Mustafa\\source\\repos\\Projeler\\ProjectManagement\\ProjectManagement.Data\\obj\\",
+      "outputPath": "C:\\Users\\Mustafa\\Github\\GitHub\\ProjectManagement\\ProjectManagement\\ProjectManagement.Data\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -4830,8 +4830,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\Users\\Mustafa\\source\\repos\\Projeler\\ProjectManagement\\ProjectManagement.Domain\\ProjectManagement.Domain.csproj": {
-              "projectPath": "C:\\Users\\Mustafa\\source\\repos\\Projeler\\ProjectManagement\\ProjectManagement.Domain\\ProjectManagement.Domain.csproj"
+            "C:\\Users\\Mustafa\\Github\\GitHub\\ProjectManagement\\ProjectManagement\\ProjectManagement.Domain\\ProjectManagement.Domain.csproj": {
+              "projectPath": "C:\\Users\\Mustafa\\Github\\GitHub\\ProjectManagement\\ProjectManagement\\ProjectManagement.Domain\\ProjectManagement.Domain.csproj"
             }
           }
         }
