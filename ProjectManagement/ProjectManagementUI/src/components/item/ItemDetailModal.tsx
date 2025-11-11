@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import Modal from '../common/Modal';
 import { format, parseISO } from 'date-fns'; // <-- HATA DÜZELTMESİ (TS2552, TS2304)
-import { type Item, type Group, type Column, ColumnType, type DependencyType, type DependencyLink, type User } from '../../types';
-import { FiCheckSquare, FiFileText, FiActivity, FiCheck, FiX, FiPlus, FiUsers } from 'react-icons/fi';
-
+import { type Item, type Group, type Column, ColumnType } from '../../types';
+import { FiCheckSquare, FiFileText, FiActivity, FiCheck, FiX } from 'react-icons/fi';
 // --- Redux Hook'ları ve Eylemleri ---
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
@@ -17,23 +16,11 @@ import { selectAllGroups } from '../../store/features/groupSlice';
 // --- Ortak Bileşenler (Popover ve Pill) ---
 import Popover from '../common/Popover';
 import Pill from '../common/Pill';
-import { selectAllUsers } from '../../store/features/userSlice';
+import DependencyCell from './DependencyCell';
+import PersonCell from './PersonCell';
+import { STATUS_OPTIONS } from '../common/constants';
 
-// --- YENİ YARDIMCI FONKSİYONLAR ---
-// (PersonCell.tsx'teki ile aynı)
-// Backend 'User' tipini, bileşenin beklediği 'ViewUser' tipine dönüştür
-const transformUserForView = (user: ReturnType<typeof selectAllUsers>[0]) => {
-    const initials = `${user.firstName[0] || ''}${user.lastName[0] || ''}`.toUpperCase();
-    return {
-        id: user.id,
-        name: `${user.firstName} ${user.lastName}`,
-        avatarUrl: undefined,
-        initials: initials || user.username[0].toUpperCase(),
-    };
-};
-// ---------------------------------
-
-// --- Satır Bileşeni (GÜNCELLENDİ) ---
+// --- Satır Bileşeni ---
 interface DetailRowProps {
     label: string;
     children: React.ReactNode;
@@ -60,394 +47,11 @@ const DetailRow: React.FC<DetailRowProps> = ({ label, children, onClick, valueRe
         </div>
     </div>
 );
-// --- GÜNCELLEME SONU ---
-
-// --- StatusCell'deki Mantık (Modal içine taşındı) ---
-const STATUS_OPTIONS = [
-    { text: 'Yapılıyor', classes: 'bg-orange-100 text-orange-800' },
-    { text: 'Tamamlandı', classes: 'bg-green-100 text-green-800' },
-    { text: 'Takıldı', classes: 'bg-red-100 text-red-800' },
-    { text: 'Beklemede', classes: 'bg-blue-100 text-blue-800' },
-    { text: 'Belirsiz', classes: 'bg-gray-100 text-gray-800' },
-];
-
-
-// Bağımlılık Çipi
-const DependencyChip: React.FC<{ text: string, onClick?: () => void }> = ({ text, onClick }) => (
-    <div
-        onClick={onClick}
-        className={`bg-gray-200 text-gray-800 text-xs font-medium px-2.5 py-1 rounded-full flex items-center ${onClick ? 'cursor-pointer hover:bg-gray-300' : ''}`}
-    >
-        {text}
-    </div>
-);
-
-// Bağımlılıkları işlemek için tip
-type ProcessedDependency = DependencyLink & { name: string };
-
-interface DependencyCellProps {
-    item: Item;
-    columnId: number;
-    value: string; // JSON string
-    allItems: Item[];
-}
-
-const DependencyCell: React.FC<DependencyCellProps> = ({ item, columnId, value, allItems }) => {
-    const dispatch = useAppDispatch();
-
-    // --- State'ler ---
-    const [isViewOpen, setIsViewOpen] = useState(false); // '...daha fazla' popover'ı
-    const [isAddOpen, setIsAddOpen] = useState(false); // 'Ekle' popover'ı
-    const [depType, setDepType] = useState<DependencyType>('FS'); // Yeni eklenecek tipi tut
-
-    // --- Ref'ler ---
-    const viewRef = useRef<HTMLDivElement>(null); // '+1' çipi için ref
-    const addRef = useRef<HTMLButtonElement>(null); // '+' butonu için ref
-
-    // --- Veri İşleme ---
-    // 1. JSON string'ini DependencyLink[] dizisine çevir
-    const dependencies = useMemo((): DependencyLink[] => {
-        try {
-            const parsed = JSON.parse(value || '[]');
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    }, [value]);
-
-    // 2. ID'leri, 'allItems' kullanarak proje adlarına çevir
-    const processedDeps = useMemo((): ProcessedDependency[] => {
-        return dependencies
-            .filter(link => allItems.some(i => i.id === link.id))
-            .map(link => {
-                const linkedItem = allItems.find(i => i.id === link.id)!;
-                return { ...link, name: linkedItem.name };
-            });
-    }, [dependencies, allItems]);
-
-    // 3. Mevcut bağımlılık ID'leri (listede tekrar göstermemek için)
-    const existingIds = useMemo(() => new Set(dependencies.map(d => d.id)), [dependencies]);
-
-    // 4. Eklenebilecek görevler (kendisi ve zaten ekli olanlar hariç)
-    const addableItems = useMemo(() => {
-        return allItems.filter(i => i.id !== item.id && !existingIds.has(i.id));
-    }, [allItems, item.id, existingIds]);
-
-    // --- Handler'lar ---
-    const updateDependencies = (newDeps: DependencyLink[]) => {
-        const newValue = JSON.stringify(newDeps);
-        dispatch(updateItemValue({
-            itemId: item.id,
-            columnId: columnId,
-            value: newValue
-        }));
-    };
-
-    const handleAddDep = (newItemId: number) => {
-        const newLink: DependencyLink = { id: newItemId, type: depType };
-        updateDependencies([...dependencies, newLink]);
-        setIsAddOpen(false); // Ekleme popover'ını kapat
-    };
-
-    const handleRemoveDep = (idToRemove: number) => {
-        const newDeps = dependencies.filter(d => d.id !== idToRemove);
-        updateDependencies(newDeps);
-    };
-
-    return (
-        <div className="flex flex-wrap items-center gap-1.5">
-            {/* 1. İlk Çip (varsa) */}
-            {processedDeps.length > 0 && (
-                <DependencyChip text={`${processedDeps[0].type}: ${processedDeps[0].name}`} />
-            )}
-
-            {/* 2. '...daha fazla' Sayacı (varsa) */}
-            {processedDeps.length > 1 && (
-                <div ref={viewRef}>
-                    <DependencyChip
-                        text={`+${processedDeps.length - 1}`}
-                        onClick={() => setIsViewOpen(true)}
-                    />
-                </div>
-            )}
-
-            {/* 3. Ekle Butonu */}
-            <button
-                ref={addRef}
-                onClick={() => setIsAddOpen(true)}
-                className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600"
-            >
-                <FiPlus size={16} />
-            </button>
-
-            {/* 4. Tümünü Gör Popover'ı */}
-            <Popover
-                isOpen={isViewOpen}
-                onClose={() => setIsViewOpen(false)}
-                targetRef={viewRef}
-                widthClass="w-64"
-                paddingClass="p-2"
-            >
-                <ul className="max-h-60 overflow-y-auto">
-                    {processedDeps.map(dep => (
-                        <li key={dep.id} className="flex items-center justify-between p-2 text-sm text-gray-800 hover:bg-gray-50 rounded">
-                            <span><span className="font-semibold">{dep.type}</span>: {dep.name}</span>
-                            <button
-                                onClick={() => handleRemoveDep(dep.id)}
-                                className="text-gray-400 hover:text-red-500"
-                            >
-                                <FiX size={14} />
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </Popover>
-
-            {/* 5. Yeni Ekle Popover'ı */}
-            <Popover
-                isOpen={isAddOpen}
-                onClose={() => setIsAddOpen(false)}
-                targetRef={addRef}
-                widthClass="w-72" // Biraz daha geniş
-                paddingClass="p-3"
-            >
-                <div className="flex flex-col">
-                    <div className="font-medium text-sm mb-2">Bağımlılık Türü</div>
-                    <select
-                        value={depType}
-                        onChange={(e) => setDepType(e.target.value as DependencyType)}
-                        className="w-full border-gray-300 rounded-md shadow-sm text-sm mb-3"
-                    >
-                        <option value="FS">Finish to Start (FS)</option>
-                        <option value="SS">Start to Start (SS)</option>
-                        <option value="FF">Finish to Finish (FF)</option>
-                        <option value="SF">Start to Finish (SF)</option>
-                    </select>
-
-                    <div className="font-medium text-sm mb-2">Görev Seç</div>
-                    <ul className="max-h-48 overflow-y-auto border border-gray-200 rounded-md">
-                        {addableItems.length > 0 ? (
-                            addableItems.map(addItem => (
-                                <li
-                                    key={addItem.id}
-                                    onClick={() => handleAddDep(addItem.id)}
-                                    className="p-2 text-sm text-gray-800 hover:bg-gray-100 cursor-pointer truncate"
-                                    title={addItem.name}
-                                >
-                                    {addItem.name}
-                                </li>
-                            ))
-                        ) : (
-                            <li className="p-2 text-sm text-gray-500 text-center">Eklenecek görev yok.</li>
-                        )}
-                    </ul>
-                </div>
-            </Popover>
-        </div>
-    );
-};
-
-
-// Kişi Avatar Çipi (İsimsiz, sadece avatar/baş harf)
-const AvatarChip: React.FC<{ user: ReturnType<typeof transformUserForView>, title: string, onClick?: () => void }> = ({ user, title, onClick }) => (
-    <div
-        onClick={onClick}
-        title={title}
-        className={`inline-block h-7 w-7 rounded-full ring-2 ring-white bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold ${onClick ? 'cursor-pointer' : ''}`}
-    >
-        {user.avatarUrl ? (
-            <img className="h-full w-full rounded-full object-cover" src={user.avatarUrl} alt={user.name} />
-        ) : (
-            user.initials
-        )}
-    </div>
-);
-
-// Kişi Sayacı Çipi (+N)
-const CountChip: React.FC<{ count: number, onClick: () => void }> = ({ count, onClick }) => (
-    <div
-        onClick={onClick}
-        title={`${count} kişi daha`}
-        className="inline-flex items-center justify-center h-7 w-7 rounded-full ring-2 ring-white bg-gray-200 text-gray-600 text-xs font-bold cursor-pointer"
-    >
-        +{count}
-    </div>
-);
-
-
-interface PersonEditorProps {
-    item: Item;
-    columnId: number;
-    value: string; // JSON string (örn: "[1, 3]")
-}
-
-const PersonEditor: React.FC<PersonEditorProps> = ({ item, columnId, value }) => {
-    const dispatch = useAppDispatch();
-
-    const allUsers = useAppSelector(selectAllUsers);
-    
-    // --- State'ler ---
-    const [isViewOpen, setIsViewOpen] = useState(false); // Atananları gör popover'ı
-    const [isAddOpen, setIsAddOpen] = useState(false); // Yeni kişi ekle popover'ı
-
-    // --- Ref'ler ---
-    const viewRef = useRef<HTMLDivElement>(null); // '+N' sayacı için ref
-    const addRef = useRef<HTMLButtonElement>(null); // '+' butonu için ref
-
-    // --- Veri İşleme (PersonCell.tsx'den) ---
-    // 1. JSON string'ini ID dizisine çevir
-    const selectedUserIds = useMemo((): number[] => {
-        try {
-            const parsed = JSON.parse(value || '[]');
-            if (Array.isArray(parsed) && parsed.every(id => typeof id === 'number')) {
-                return parsed as number[];
-            }
-        } catch { }
-        return [];
-    }, [value]);
-
-    // 2. ID'leri User nesnelerine çevir
-    const assignedUsers = useMemo(() => {
-        const idSet = new Set(selectedUserIds);
-        return allUsers
-        .filter(user => idSet.has(user.id))
-        .map(transformUserForView);
-    }, [selectedUserIds, allUsers]);
-
-    // 3. Eklenebilecek kullanıcılar (zaten atanmamış olanlar)
-    const addableUsers = useMemo(() => {
-        const idSet = new Set(selectedUserIds);
-        return allUsers
-        .filter(user => !idSet.has(user.id))
-        .map(transformUserForView);
-    }, [selectedUserIds, allUsers]);
-
-    // --- Handler'lar ---
-    const updateAssignedUsers = (newUserIds: number[]) => {
-        const newValue = JSON.stringify(newUserIds);
-        dispatch(updateItemValue({
-            itemId: item.id,
-            columnId: columnId,
-            value: newValue
-        }));
-    };
-
-    const handleAddUser = (userId: number) => {
-        const newIds = [...selectedUserIds, userId];
-        updateAssignedUsers(newIds);
-        // (Ekleme popover'ı açık kalabilir)
-    };
-
-    const handleRemoveUser = (userId: number) => {
-        const newIds = selectedUserIds.filter(id => id !== userId);
-        updateAssignedUsers(newIds);
-    };
-
-    return (
-        <div className="flex flex-wrap items-center gap-1.5">
-            {/* 1. İlk Avatar (varsa) */}
-            {assignedUsers.length > 0 && (
-                <div ref={viewRef} className="-mr-1.5"> {/* Popover'ın hizalanması için ref burada */}
-                    <AvatarChip
-                        user={assignedUsers[0]}
-                        title={assignedUsers[0].name}
-                        onClick={() => setIsViewOpen(true)} // Tıklandığında listeyi aç
-                    />
-                </div>
-            )}
-
-            {/* 2. '+N' Sayacı (varsa) */}
-            {assignedUsers.length > 1 && (
-                // Eğer ilk avatar gösterildiyse, ref'i buna taşı
-                <div ref={assignedUsers.length > 0 ? undefined : viewRef}>
-                    <CountChip
-                        count={assignedUsers.length - 1}
-                        onClick={() => setIsViewOpen(true)}
-                    />
-                </div>
-            )}
-
-            {/* 3. Ekle Butonu */}
-            <button
-                ref={addRef}
-                onClick={() => setIsAddOpen(true)}
-                className={`w-7 h-7 rounded-full flex items-center justify-center 
-                    ${assignedUsers.length === 0
-                        ? 'border-2 border-dashed border-gray-300 text-gray-400 hover:bg-blue-100 hover:border-blue-300 hover:text-blue-500' // Placeholder
-                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600' // Standart '+' butonu
-                    }`}
-            >
-                {/* Atama yoksa FiUsers, varsa FiPlus göster */}
-                {assignedUsers.length === 0 ? <FiUsers size={16} /> : <FiPlus size={16} />}
-            </button>
-
-            {/* 4. Atananları Gör Popover'ı */}
-            <Popover
-                isOpen={isViewOpen}
-                onClose={() => setIsViewOpen(false)}
-                targetRef={viewRef}
-                widthClass="w-60"
-                paddingClass="p-2"
-            >
-                <h4 className="font-semibold text-sm mb-2 text-gray-700 px-1.5">Atanan Kişiler</h4>
-                <ul className="max-h-60 overflow-y-auto">
-                    {assignedUsers.map(user => (
-                        <li key={user.id} className="flex items-center justify-between p-1.5 text-sm text-gray-800 hover:bg-gray-50 rounded">
-                            <div className="flex items-center gap-2">
-                                <AvatarChip user={user} title={user.name} />
-                                <span>{user.name}</span>
-                            </div>
-                            <button
-                                onClick={() => handleRemoveUser(user.id)}
-                                className="text-gray-400 hover:text-red-500 p-1"
-                            >
-                                <FiX size={14} />
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </Popover>
-
-            {/* 5. Yeni Ekle Popover'ı */}
-            <Popover
-                isOpen={isAddOpen}
-                onClose={() => setIsAddOpen(false)}
-                targetRef={addRef}
-                widthClass="w-60"
-                paddingClass="p-2"
-            >
-                <h4 className="font-semibold text-sm mb-2 text-gray-700 px-1.5">Kişi Ekle</h4>
-                <div className="max-h-48 overflow-y-auto mb-2 space-y-1">
-                    {addableUsers.length > 0 ? (
-                        addableUsers.map(user => (
-                            <label
-                                key={user.id}
-                                onClick={() => handleAddUser(user.id)}
-                                className="flex items-center p-1.5 rounded hover:bg-gray-100 cursor-pointer"
-                            >
-                                <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold mr-2 flex-shrink-0">
-                                    {user.avatarUrl ? (
-                                        <img src={user.avatarUrl} alt={user.name} className="w-full h-full rounded-full object-cover" />
-                                    ) : (
-                                        user.initials
-                                    )}
-                                </div>
-                                <span className="text-sm text-gray-800 truncate">{user.name}</span>
-                            </label>
-                        ))
-                    ) : (
-                        <div className="p-1.5 text-sm text-gray-500 text-center">Tüm kullanıcılar atanmış.</div>
-                    )}
-                </div>
-            </Popover>
-        </div>
-    );
-};
 
 
 // --- Ana Modal Bileşeni ---
 
-type ItemDetailTab = 'updates' | 'docs' | 'activity';
+type ItemDetailTab = 'updates' | 'files' | 'activity' | 'more';
 // State'i artık 'status' gibi stringler yerine 'columnId' (number) veya 'group' ile tutacağız
 type EditingField = number | 'group' | null;
 
@@ -468,14 +72,19 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     group,
     columns,
     boardName,
-    allItems,
 }) => {
     const dispatch = useAppDispatch();
     // Pano gruplarını (taşımak için) Redux'tan çek
     const allGroups = useAppSelector(selectAllGroups);
 
     // --- State'ler ---
-    const [activeTab, setActiveTab] = useState<ItemDetailTab>('updates');
+    const [activeTab, setActiveTab] = useState<ItemDetailTab>('updates' as ItemDetailTab);
+
+    const tabs = [
+        { key: 'updates', label: 'Güncellemeler', icon: <FiFileText /> }, // FiFileText [8]
+        { key: 'files', label: 'Dosyalar', icon: <FiCheckSquare /> }, // FiCheckSquare [8]
+        { key: 'activity', label: 'Etkinlik Günlüğü', icon: <FiActivity /> }, // FiActivity [8]
+    ];
     const [itemName, setItemName] = useState(item.name);
     const [isEditingName, setIsEditingName] = useState(false);
 
@@ -577,13 +186,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     // --- 'useMemo' Alanları (Aynı) ---
     const detailFields = useMemo(() => {
         return columns
-            // .filter(col =>
-            //     col.type === ColumnType.Person ||
-            //     col.type === ColumnType.Status ||
-            //     col.type === ColumnType.Date ||
-            //     col.type === ColumnType.Timeline ||
-            //     col.type === ColumnType.Dependency
-            // )
             .map(col => {
                 const value = item.itemValues.find(v => v.columnId === col.id)?.value || '';
                 return {
@@ -596,13 +198,21 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     }, [columns, item.itemValues]);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="" size="2xl" >
-            <div className="flex flex-col h-[80vh]">
-                {/* Sol Panel: Detaylar */}
-                <div className="w-full h-full overflow-y-auto p-6 ">
-                    {/* ... (Başlık Alanı ve Düzenlenebilir Proje Adı aynı) ... */}
+        /* --- Modal içeriği: sol/ayırıcı/sağ düzeni (monday.com benzeri) --- */
+        <Modal isOpen={isOpen} onClose={onClose} title="" size="7xl" >
+            <button
+                onClick={onClose}
+                className="absolute top-3 right-4 text-gray-400 hover:text-gray-600 z-20"
+                aria-label="Kapat"
+            >
+                <FiX size={18} />
+            </button>
+            {/* Ana yatay kapsayıcı: sol (detaylar) | ayırıcı | sağ (sekmeler) */}
+            <div className="flex h-[80vh] gap-4">
+                {/* SOL PANEL */}
+                <div className="w-full lg:w-2/3 h-full overflow-y-auto p-6 bg-white rounded-md shadow-sm">
+                    {/* Başlık ve düzenlenebilir isim */}
                     <div className="pb-4 border-b border-gray-200 relative">
-
                         {isEditingName ? (
                             <input
                                 type="text"
@@ -626,15 +236,12 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Alanlar (Sütunlar) (GÜNCELLENDİ) */}
+                    {/* Alanlar (Sütunlar) */}
                     <div className="py-4">
-
-                        {/* GÜNCELLENDİ: Tıklanabilir Grup Satırı */}
+                        {/* Grup satırı (DetailRow kullanıyor) */}
                         <div key="group-row">
                             <DetailRow
                                 label="Grup"
-                                // GÜNCELLEME: Tıklama 'DetailRow' yerine 'valueRef' div'ine eklendi
-                                // (Tüm satıra tıklamak yerine sadece değere tıklamayı sağlar)
                                 valueRef={(el) => {
                                     rowRefs.current.set('group', el);
                                     if (el) el.onclick = () => setEditingField('group');
@@ -650,11 +257,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                 ) : 'Grup Bulunamadı'}
                             </DetailRow>
                         </div>
-                        {/* GÜNCELLEME: Grup Değiştirme Popover'ı */}
+
+                        {/* Grup değiştir popover — aynı kod */}
                         <Popover
                             isOpen={editingField === 'group'}
                             onClose={() => setEditingField(null)}
-                            // Ref'i 'group' ID'si ile al (doğru ref)
                             targetRef={{ current: rowRefs.current.get('group') || null }}
                         >
                             <ul className="py-1 w-48">
@@ -671,17 +278,14 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                             </ul>
                         </Popover>
 
-
-                        {/* Dinamik Alanlar (Artık Tıklanabilir) */}
+                        {/* Dinamik alanlar (detailFields) — senin mevcut render mantığın burada aynı çalışır */}
                         {detailFields.map(field => {
                             const currentOption = STATUS_OPTIONS.find(opt => opt.text === field.value) || STATUS_OPTIONS[4];
-
-                            // Hangi alanların düzenlenebilir olduğunu tanımla
                             const isEditable = [
                                 ColumnType.Status,
                                 ColumnType.Date,
                                 ColumnType.Timeline,
-                                ColumnType.Text, // <-- YENİ
+                                ColumnType.Text,
                             ].includes(field.type);
 
                             return (
@@ -690,11 +294,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                         label={field.label}
                                         valueRef={(el) => {
                                             rowRefs.current.set(field.id, el);
-                                            // Tıklama olayını ayarla
                                             if (isEditable && el) {
                                                 el.onclick = () => {
                                                     setEditingField(field.id);
-                                                    // State'leri doldur
                                                     if (field.type === ColumnType.Timeline && field.value) {
                                                         const [start, end] = field.value.split('/');
                                                         setTimelineStart(start || '');
@@ -704,14 +306,10 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                                     }
                                                 };
                                             }
-                                            // (Dependency ve Person kendi tıklamalarını yönetir)
                                         }}
                                     >
-                                        {/* Değeri Göster VEYA Düzenleyiciyi Göster */}
                                         {(() => {
-                                            // --- Düzenleme modu ---
                                             if (editingField === field.id) {
-                                                // 🟦 Text türü
                                                 if (field.type === ColumnType.Text) {
                                                     return (
                                                         <input
@@ -736,8 +334,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                                         />
                                                     );
                                                 }
-
-                                                // 🟨 Date türü
                                                 if (field.type === ColumnType.Date) {
                                                     const currentValue = field.value || "";
                                                     return (
@@ -751,8 +347,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                                         />
                                                     );
                                                 }
-
-                                                // 🟩 Timeline türü — aynı date görünümünde iki input yanyana
                                                 if (field.type === ColumnType.Timeline) {
                                                     return (
                                                         <div className="flex gap-2">
@@ -778,33 +372,22 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                                 }
                                             }
 
-
-                                            // --- Statik mod (Tüm tipler) ---
                                             switch (field.type) {
                                                 case ColumnType.Status:
                                                     return <Pill text={currentOption.text} colorClasses={currentOption.classes} />;
 
-                                                // --- YENİ: Bağımlılık ---
                                                 case ColumnType.Dependency:
                                                     return <DependencyCell
                                                         item={item}
-                                                        columnId={field.id}
-                                                        value={field.value}
-                                                        allItems={allItems}
+                                                        column={columns.find(c => c.id === field.id)!}
+                                                        align={'left'}
                                                     />;
-                                                // YENİ: Kişi (Person)
                                                 case ColumnType.Person:
-                                                    return <PersonEditor
-                                                        item={item}
-                                                        columnId={field.id}
-                                                        value={field.value}
-                                                    />;
+                                                    return <PersonCell item={item} column={columns.find(c => c.id === field.id)!} align='left' />;
 
-                                                // --- Diğer tipler (Aynı) ---
-                                                case ColumnType.Person:
-                                                    return <span className="text-gray-500">{field.value || 'Atanmadı'}</span>;
                                                 case ColumnType.Date:
                                                     return <span>{field.value ? format(parseISO(field.value), 'MMM d') : 'Tarih Yok'}</span>;
+
                                                 case ColumnType.Timeline:
                                                     return <span>{field.value ? field.value.replace('/', ' - ') : 'Zaman Çizelgesi Yok'}</span>;
                                                 case ColumnType.Text:
@@ -815,14 +398,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                         })()}
                                     </DetailRow>
 
-                                    {/* --- DÜZENLEME POPOVER'LARI --- */}
-
-                                    {/* 1. Durum Popover'ı (Sadece Popover kullanan bu kaldı) */}
+                                    {/* Status popover (aynı şekilde) */}
                                     {field.type === ColumnType.Status && (
                                         <Popover
                                             isOpen={editingField === field.id}
                                             onClose={() => setEditingField(null)}
-                                            // Ref'i 'field.id' ile al (doğru ref)
                                             targetRef={{ current: rowRefs.current.get(field.id) || null }}
                                         >
                                             <ul className="py-1 w-48">
@@ -832,29 +412,95 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                                                         onClick={() => handleValueChange(field.id, option.text)}
                                                         className="flex justify-between items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
                                                     >
-                                                        {/* YENİ: Renk Önizlemesi */}
                                                         <div className="flex items-center gap-2">
                                                             <span
-                                                                // Arka plan rengini (bg-...) alıyoruz ve border ekliyoruz
                                                                 className={`w-3 h-3 rounded-full border border-gray-300 ${option.classes.split(' ')[0]}`}
                                                                 title={option.text}
                                                             ></span>
                                                             <span>{option.text}</span>
                                                         </div>
-                                                        {/* Onay İkonu */}
                                                         {field.value === option.text && <FiCheck className="text-blue-500" />}
                                                     </li>
                                                 ))}
                                             </ul>
                                         </Popover>
                                     )}
-
-                                    {/* 2. Tarih Popover'ı (KALDIRILDI, inline oldu) */}
-                                    {/* 3. Zaman Çizelgesi Popover'ı (KALDIRILDI, inline oldu) */}
-
                                 </div>
                             );
                         })}
+                    </div>
+                </div>
+
+                {/* ORTADAKİ DİKEY AYIRICI */}
+                <div className="hidden lg:flex items-center">
+                    {/* görünürlük büyük ekranlarda; mobilde sağ panel alt satıra iner */}
+                    <div className="w-px bg-gray-200 h-full mx-2" aria-hidden="true" />
+                </div>
+
+                {/* SAĞ PANEL (sekmeler) */}
+                <div className="w-full lg:w-3/4 h-full bg-gray-50 rounded-md overflow-hidden flex flex-col">
+                    {/* Sekme başlığı (sticky) */}
+                    <div className="flex-shrink-0 sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-4">
+                        <div className="flex gap-2">
+                            {tabs.map((tab) => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setActiveTab(tab.key as ItemDetailTab)}
+                                    className={`flex items-center gap-2 py-3 px-3 text-sm font-medium transition-colors rounded-t-sm
+                ${activeTab === tab.key ? 'bg-white text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    {tab.icon} <span className="hidden sm:inline">{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Sekme içerikleri — kaydırılabilir */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        {activeTab === 'files' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold">Görev Belgeleri</h3>
+                                {columns.filter(col => col.type === ColumnType.Document).map(docColumn => {
+                                    const docValue = item.itemValues.find(v => v.columnId === docColumn.id)?.value || '';
+                                    return (
+                                        <div key={docColumn.id} className="p-3 border rounded-md bg-white">
+                                            <p className="text-xs font-medium text-gray-500 mb-1">{docColumn.title}</p>
+                                            {docValue ? (
+                                                <a href={docValue} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm break-all">
+                                                    {docValue.substring(docValue.lastIndexOf('/') + 1)}
+                                                </a>
+                                            ) : (
+                                                <p className="text-sm text-gray-400">Belge atanmamış.</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {columns.filter(c => c.type === ColumnType.Document).length === 0 && (
+                                    <p className="text-sm text-gray-500">Bu panoda dosya sütunu bulunmamaktadır.</p>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'updates' && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2">Görev Güncellemeleri</h3>
+                                <p className="text-sm text-gray-600">Güncellemeler buraya gelecek. (API/Redux entegrasyonu gerektirir.)</p>
+                            </div>
+                        )}
+
+                        {activeTab === 'activity' && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2">Etkinlik Günlüğü</h3>
+                                <p className="text-sm text-gray-600">Tarih/saat bazlı tüm değişiklikler burada listelenecek.</p>
+                            </div>
+                        )}
+
+                        {activeTab === 'more' && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2">Daha Fazlası</h3>
+                                <p className="text-sm text-gray-600">Ek aksiyonlar, entegrasyonlar veya bağlantılar buraya gelebilir.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

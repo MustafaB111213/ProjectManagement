@@ -13,6 +13,7 @@ import { FiPlus, FiGitBranch, FiX, FiCheck } from 'react-icons/fi'; // FiX impor
 interface DependencyCellProps {
   item: Item;
   column: Column;
+  align?: 'center' | 'left';
 }
 
 // ... (DependencyChip, ProcessedDependency tipleri aynı)
@@ -25,12 +26,6 @@ const DependencyChip: React.FC<{ text: string, onClick?: () => void }> = ({ text
   </div>
 );
 
-type ProcessedDependency = DependencyLink & { name: string };
-// ==================================================================
-// POPULAR CONTENT (Popover içeriği - Daha önceki adımlardan)
-// = Bu component bağımlılıkları düzenler ve kaydeder.
-// ==================================================================
-// Popover İçeriği (GÜNCEL)
 const DependencyPopoverContent: React.FC<{
   currentItemId: number;
   initialDependencyLinks: DependencyLink[];
@@ -133,7 +128,7 @@ const DependencyPopoverContent: React.FC<{
   );
 };
 
-const DependencyCell: React.FC<DependencyCellProps> = ({ item, column }) => {
+const DependencyCell: React.FC<DependencyCellProps> = ({ item, column, align }) => {
   const dispatch = useAppDispatch();
   const allItems = useAppSelector(selectAllItemsFlat);
 
@@ -195,7 +190,7 @@ const DependencyCell: React.FC<DependencyCellProps> = ({ item, column }) => {
   const firstDepItem = firstDep ? dependentItemsMap.get(firstDep.id) : null;
 
   return (
-    <div className="w-full h-full flex items-center justify-center p-2">
+    <div className={`w-full h-full flex items-center ${align === 'left' ? 'justify-start' : 'justify-center'} p-2`}>
 
       <div className="flex items-center gap-1.5">
         {/* 1. İlk Çip (varsa) */}

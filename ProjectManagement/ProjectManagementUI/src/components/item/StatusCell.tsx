@@ -7,15 +7,7 @@ import { updateItemValue } from '../../store/features/itemSlice';
 import Pill from '../common/Pill';
 import Popover from '../common/Popover';
 import { FiCheck } from 'react-icons/fi'; // Onay ikonu için FiCheck import edildi
-
-// Projemiz için varsayılan durum seçenekleri ve renkleri (Aynı)
-const STATUS_OPTIONS = [
-    { text: 'Yapılıyor', classes: 'bg-orange-100 text-orange-800' },
-    { text: 'Tamamlandı', classes: 'bg-green-100 text-green-800' },
-    { text: 'Takıldı', classes: 'bg-red-100 text-red-800' },
-    { text: 'Beklemede', classes: 'bg-blue-100 text-blue-800' },
-    { text: 'Belirsiz', classes: 'bg-gray-100 text-gray-800' },
-];
+import { STATUS_OPTIONS } from '../common/constants';
 
 interface StatusCellProps {
     item: Item;

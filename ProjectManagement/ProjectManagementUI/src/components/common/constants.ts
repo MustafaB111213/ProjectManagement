@@ -39,3 +39,12 @@ export const GANTT_BAR_TOP_OFFSET_PX = (GANTT_ROW_HEIGHT_PX - GANTT_BAR_HEIGHT_P
 
 // Okların çubuğun ortasından çıkması için hesaplama (Bar yüksekliğinin yarısı + offset)
 export const GANTT_ARROW_VERTICAL_MID_OFFSET = GANTT_BAR_TOP_OFFSET_PX + (GANTT_BAR_HEIGHT_PX / 2);
+
+// --- StatusCell'deki Mantık (Modal içine taşındı) ---
+export const STATUS_OPTIONS = [
+    { text: 'Yapılıyor', classes: 'bg-orange-100 text-orange-800' },
+    { text: 'Tamamlandı', classes: 'bg-green-100 text-green-800' },
+    { text: 'Takıldı', classes: 'bg-red-100 text-red-800' },
+    { text: 'Beklemede', classes: 'bg-blue-100 text-blue-800' },
+    { text: 'Belirsiz', classes: 'bg-gray-100 text-gray-800' },
+];

@@ -20,13 +20,12 @@ const transformUserForView = (user: ReturnType<typeof selectAllUsers>[0]) => {
         initials: initials || user.username[0].toUpperCase(),
     };
 };
-// ---------------------------------
-
 
 // Props arayüzü
 interface PersonCellProps {
     item: Item;
     column: Column;
+    align: 'left' | 'center';
 }
 
 // Popover içindeki içeriği yönetecek alt component
@@ -65,7 +64,7 @@ const PersonPopoverContent: React.FC<{
         <div className="w-60 p-2 bg-white rounded-md shadow-lg border border-gray-200">
             <h4 className="font-semibold text-sm mb-2 text-gray-700 px-1.5">Kişi Ata</h4>
             <div className="max-h-48 overflow-y-auto mb-2 space-y-1">
-                
+
                 {viewUsers.map(user => (
                     <label key={user.id} className="flex items-center p-1.5 rounded hover:bg-gray-100 cursor-pointer">
                         <input
@@ -96,7 +95,7 @@ const PersonPopoverContent: React.FC<{
 };
 
 // Ana PersonCell Component'i
-const PersonCell: React.FC<PersonCellProps> = ({ item, column }) => {
+const PersonCell: React.FC<PersonCellProps> = ({ item, column, align = 'center' }) => {
     const dispatch = useAppDispatch();
     const [isPopoverOpen, setPopoverOpen] = useState(false);
     const cellRef = useRef<HTMLDivElement>(null);
@@ -149,8 +148,7 @@ const PersonCell: React.FC<PersonCellProps> = ({ item, column }) => {
             <div
                 ref={cellRef}
                 onClick={() => setPopoverOpen(true)}
-                className="w-full h-full flex items-center justify-center cursor-pointer group p-1" // Padding ayarlandı
-            >
+                className={`w-full h-full flex items-center ${align === 'left' ? 'justify-start' : 'justify-center'} cursor-pointer group p-2`}            >
                 {assignedUsers.length > 0 ? (
                     // Eğer kullanıcı(lar) atanmışsa, avatarları göster
                     <div className="flex -space-x-2 overflow-hidden items-center"> {/* Avatarları üst üste bindir */}

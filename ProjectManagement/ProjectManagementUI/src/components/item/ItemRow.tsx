@@ -109,7 +109,7 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, color, columns, gridTemplateCol
         }
     }, [dispatch, boardId, item.id, item.groupId, item.name]); // Bağımlılıkları ekle
     // ----------------------------
-    
+
     // --- Dinamik Hücre Render Etme ---
     const renderCellContent = (column: Column) => {
         const columnType = column.type as ColumnType;
@@ -124,9 +124,9 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, color, columns, gridTemplateCol
             case ColumnType.Document:
                 return <DocumentCell item={item} column={column} />;
             case ColumnType.Person:
-                return <PersonCell item={item} column={column} />;
+                return <PersonCell item={item} column={column} align={'center'} />;
             case ColumnType.Dependency:
-                return <DependencyCell item={item} column={column} />;
+                return <DependencyCell item={item} column={column}  />;
             case ColumnType.Text:
             default:
                 return <TextCell item={item} column={column} />;
@@ -136,7 +136,7 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, color, columns, gridTemplateCol
     return (
         <div
             // GÜNCELLENDİ: 'borderLeft' buradan kaldırıldı
-            className="grid items-center border-b border-gray-100 last:border-b-0 hover:bg-gray-50 text-sm group"
+            className="grid items-center border-b border-gray-100 last:border-b-0 hover:bg-gray-50 text-base group"
             style={{ gridTemplateColumns }}
         >
             {/* Checkbox Alanı (Sticky) */}
@@ -151,11 +151,12 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, color, columns, gridTemplateCol
 
             {/* Görev Adı (Sticky ve Düzenlenebilir) */}
             <div
-                className="sticky z-10 bg-white group-hover:bg-gray-50 :bg-gray-800 :group-hover:bg-gray-700/[0.5] px-2 py-3 border-r border-gray-200 :border-gray-700 h-full flex items-center justify-between gap-x-2" // justify-between eklendi
-                style={{ left: '60px' }}
-                onDoubleClick={() => !isEditing && setIsEditing(true)} // Sadece düzenlemede değilken çift tıkla
-                title={item.name}
+                className="sticky z-10 bg-white group-hover:bg-gray-50 :bg-gray-800 :group-hover:bg-gray-700/50 px-2 py-3 border-r border-gray-200 :border-gray-700 h-full flex items-center justify-between gap-x-2"
+                style={{ left: '60px', maxWidth: '400px' }} // Gösterilecek genişliği sınırladık
+                onDoubleClick={() => !isEditing && setIsEditing(true)}
+                title={item.name} // Tooltip için
             >
+                
                 {/* Sol Taraf: Drag Handle ve İsim/Input */}
                 <div className="flex items-center gap-x-2 flex-grow min-w-0"> {/* flex-grow ve min-w-0 eklendi */}
                     <div {...dragHandleProps} className="text-gray-400 hover:text-gray-700 :hover:text-gray-300 cursor-grab p-1 flex-shrink-0"> {/* flex-shrink-0 */}
