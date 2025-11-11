@@ -8,12 +8,12 @@ export default {
     extend: {
       // DÜZELTME: Renkler artık doğrudan burada tanımlanıyor.
       colors: {
-        // Ana Marka Renkleri
+        
         'brand-blue': '#0073ea',
         'brand-blue-hover': '#0060b9',
         'brand-blue-surface': '#f0f7ff',
         
-        // Monday.com'dan ilham alan ek renkler
+        
         'main-purple': '#7857FF', // Bu eksikti, şimdi eklendi.
         'dark-purple': '#5842BC', // Bu eksikti, şimdi eklendi.
 
@@ -36,11 +36,11 @@ export default {
         'status-done': '#00c875',
       },
       fontSize: {
-        // Monday.com'un h1 başlığı için özel bir boyut oluşturuyoruz.
+        
         'h1': ['32px', '40px'], // [fontSize, lineHeight]
       },
       letterSpacing: {
-        // Monday.com'un başlık harf aralığı için özel bir değer oluşturuyoruz.
+        
         'h1': '-0.5px',
       },
 

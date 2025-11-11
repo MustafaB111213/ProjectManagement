@@ -60,7 +60,7 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
         // Ana Toolbar - Artık 'justify-between'
         <div className="flex items-center justify-between p-2 border-b border-gray-500 bg-white">
             
-            {/* Sol Taraf: Filtreler (Monday.com'daki gibi) */}
+            {/* Sol Taraf: Filtreler */}
             <div className="flex items-center gap-x-2">
                 <h1 className="text-xl font-semibold text-gray-900">Gantt</h1>
                 <button className={iconButtonBase} title="Gelişmiş Filtre">
@@ -68,7 +68,7 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
                 </button>
             </div>
 
-            {/* Sağ Taraf: Araçlar (Monday.com'daki gibi) */}
+            {/* Sağ Taraf: Araçlar */}
             <div className="flex items-center gap-x-3">
                 
                 <button type="button" className={buttonBase} onClick={handleTodayClick}>

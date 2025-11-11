@@ -5,20 +5,20 @@ import React, { useRef, useEffect, useState } from 'react';
 // Olası pozisyonları tanımla
 type PopoverPosition =
     | 'bottom-start' // Alt-Sol (Varsayılan)
-    | 'bottom-end'   // Alt-Sağ
-    | 'top-start'    // Üst-Sol
-    | 'top-end';     // Üst-Sağ
+    | 'bottom-end' // Alt-Sağ
+    | 'top-start' // Üst-Sol
+    | 'top-end'; // Üst-Sağ
 
 // Props arayüzü
 interface PopoverProps<T extends HTMLElement> {
-    isOpen: boolean;            // Popover açık mı?
-    onClose: () => void;        // Kapatma fonksiyonu
+    isOpen: boolean; // Popover açık mı?
+    onClose: () => void; // Kapatma fonksiyonu
     targetRef: React.RefObject<T | null>; // Tetikleyici elementin ref'i
-    children: React.ReactNode;  // Popover içeriği
+    children: React.ReactNode; // Popover içeriği
     position?: PopoverPosition; // İstenen pozisyon (opsiyonel)
-    className?: string;         // Ekstra dış stil sınıfları (opsiyonel)
-    widthClass?: string;        // Genişlik sınıfı (opsiyonel, örn: 'w-64')
-    paddingClass?: string;      // İç padding sınıfı (opsiyonel, örn: 'p-4')
+    className?: string;  // Ekstra dış stil sınıfları (opsiyonel)
+    widthClass?: string; // Genişlik sınıfı (opsiyonel, örn: 'w-64')
+    paddingClass?: string; // İç padding sınıfı (opsiyonel, örn: 'p-4')
 }
 
 // Generic Popover Component'i
@@ -27,10 +27,10 @@ const Popover = <T extends HTMLElement>({
     onClose,
     targetRef,
     children,
-    position = 'bottom-start',  // Varsayılan pozisyon
-    className = '',             // Ekstra sınıf yok
+    position = 'bottom-start', // Varsayılan pozisyon
+    className = '',  // Ekstra sınıf yok
     widthClass = 'w-auto max-w-xs', // Varsayılan genişlik: içeriğe göre, maks 'xs'
-    paddingClass = 'p-2'        // Varsayılan iç padding
+    paddingClass = 'p-2' // Varsayılan iç padding
 }: PopoverProps<T>) => {
     const popoverRef = useRef<HTMLDivElement>(null); // Popover'ın kendi ref'i
     // GÜNCELLEME: position: 'fixed' olarak başlar

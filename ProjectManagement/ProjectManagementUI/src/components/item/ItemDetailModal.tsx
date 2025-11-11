@@ -72,7 +72,7 @@ const STATUS_OPTIONS = [
 ];
 
 
-// Bağımlılık Çipi (Monday.com'daki gibi)
+// Bağımlılık Çipi
 const DependencyChip: React.FC<{ text: string, onClick?: () => void }> = ({ text, onClick }) => (
     <div
         onClick={onClick}

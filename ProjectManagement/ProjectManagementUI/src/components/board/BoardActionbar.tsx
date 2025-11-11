@@ -25,7 +25,7 @@ const BoardActionbar: React.FC = () => {
     return (
         <div className="flex items-center justify-between">
             {/* SOL TARAF: YENİ GRUP BUTONU */}
-            {/* Monday.com'dan aldığın HTML'in Tailwind karşılığı: */}
+
             <div className="flex items-center">
                 {/* Ana Buton */}
                 <button 
