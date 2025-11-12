@@ -293,7 +293,6 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                 <GanttLeftPanel
                                     // YENİ PROPLAR
                                     innerRef={leftPanelInnerRef_MODAL} // Yeni ref'i ilet
-                                    onWheel={() => {}} // Zaten kapsayıcı div'de ele alıyoruz, boş fonksiyon
                                     // ESKİ PROPLAR
                                     groups={groups}
                                     items={items}

@@ -18,7 +18,7 @@ const BoardHeader: React.FC = () => {
     return (
         // Bu 'relative' kapsayıcı, içindeki 'absolute' pozisyonlu Popover için bir referans noktasıdır.
         <div className="relative">
-            <div className="pb-4 mb-1">
+            <div>
                 <div className="flex items-center justify-between mb-1">
                     <div>
                         <div className="flex items-center gap-x-2">
@@ -28,7 +28,7 @@ const BoardHeader: React.FC = () => {
                             <button 
                                 ref={popoverTargetRef}
                                 onClick={() => setInfoPopoverOpen(prev => !prev)}
-                                className="p-4 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                                className="p-2 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-600"
                             >
                                <FiChevronDown size={24} />
                             </button>
@@ -36,7 +36,6 @@ const BoardHeader: React.FC = () => {
                     </div>
                     
                 </div>
-                <div className="border-b border-border-color-soft"></div>
             </div>
 
             <Popover

@@ -1,16 +1,20 @@
-// src/hooks/usePanelSync.ts (YENİ DOSYA)
+// src/hooks/usePanelSync.ts (GÜNCELLENMİŞ HALİ)
 
-import { useRef, useCallback } from 'react';
+import { useCallback, type RefObject,  } from 'react';
+
 /**
  * Sol ve Sağ Gantt panellerinin dikey kaydırmasını senkronize eder.
  * @param debouncedLoadMore Yatay kaydırma sırasında tembel yüklemeyi tetikleyen fonksiyon.
- * @returns Ref'ler ve olay handler'ları.
+ * @param leftPanelInnerRef Sol panelin kaydırılacak iç div'inin ref'i.
+ * @param rightPanelScrollRef Sağ panelin (ana) kaydırılabilir div'inin ref'i.
  */
 export const usePanelSync = (
-    debouncedLoadMore: (scrollLeft: number, scrollWidth: number, offsetWidth: number) => void
+    debouncedLoadMore: (scrollLeft: number, scrollWidth: number, offsetWidth: number) => void,
+    leftPanelInnerRef: RefObject<HTMLDivElement | null>,
+    rightPanelScrollRef: RefObject<HTMLDivElement | null>
 ) => {
-    const rightPanelScrollRef = useRef<HTMLDivElement>(null);
-    const leftPanelInnerRef = useRef<HTMLDivElement>(null);
+    
+    // Ref'ler artık dışarıdan (GanttView'den) geliyor.
 
     // Sağ panel (ana scroll) kaydığında tetiklenir
     const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
@@ -23,7 +27,7 @@ export const usePanelSync = (
 
         // 2. Yatay kaydırma için tembel yüklemeyi tetikle
         debouncedLoadMore(scrollLeft, scrollWidth, offsetWidth);
-    }, [debouncedLoadMore]);
+    }, [debouncedLoadMore, leftPanelInnerRef]);
 
     // Sol panel üzerinde fare tekerleği döndüğünde tetiklenir
     const handleLeftPanelWheel = useCallback((deltaY: number) => {
@@ -38,11 +42,10 @@ export const usePanelSync = (
         if (leftPanelInnerRef.current) {
             leftPanelInnerRef.current.style.transform = `translateY(-${newScrollTop}px)`;
         }
-    }, []);
+    }, [leftPanelInnerRef, rightPanelScrollRef]);
 
     return {
-        rightPanelScrollRef,
-        leftPanelInnerRef,
+        // Ref'leri döndürmeye gerek yok, zaten parent'ta (GanttView) tanımlılar
         handleScroll,
         handleLeftPanelWheel
     };

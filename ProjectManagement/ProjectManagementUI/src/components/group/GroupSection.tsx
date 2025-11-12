@@ -46,7 +46,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, dragHandleProps, dro
 
     // 2. Hafızaya alınmış selector'ı, bu component'e özel 'group.id' ile çağırıyoruz.
     const items = useAppSelector(state => selectItemsForGroup(state, group.id));
-    const itemStatus = useAppSelector((state) => state.items.status); // Item'ların yüklenme durumu
 
     // Tüm sütunları Redux store'dan alıyoruz.
     const columns = useAppSelector((state) => state.columns.items);
@@ -121,10 +120,10 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, dragHandleProps, dro
                     // Sürükle-bırak tutamacını buraya bağlıyoruz
                     {...dragHandleProps}
                     // 'group' sınıfı, içindeki 'group-hover'ların çalışmasını sağlar
-                    className="group flex items-center justify-between mb-2 px-1 cursor-grab" // Alt boşluk ve cursor
+                    className="group flex items-center justify-between mb-2 px-1 " // Alt boşluk ve cursor
                 >
                     {/* Başlık Sol Taraf */}
-                    <div className="flex items-center gap-x-2 flex-grow min-w-0">
+                    <div className="flex items-center gap-x-2 flex-grow min-w-0 ">
                         {/* YENİ: Aç/Kapat Butonu */}
                         <button
                             onClick={onToggleCollapse} // Fonksiyonu bağla
@@ -136,7 +135,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, dragHandleProps, dro
                             {isCollapsed ? <FiChevronRight size={16} /> : <FiChevronDown size={16} />}
                         </button>
                         {/* Grup Başlığı */}
-                        <h3 className="text-base font-semibold truncate cursor-pointer" style={{ color: group.color }} onClick={onToggleCollapse}> {/* Başlığa tıklayınca da açılsın */}
+                        <h3 className="text-base font-semibold truncate cursor-grab" style={{ color: group.color }} onClick={onToggleCollapse}> {/* Başlığa tıklayınca da açılsın */}
                             {group.title}
                         </h3>
                         {/* Görev Sayısı */}

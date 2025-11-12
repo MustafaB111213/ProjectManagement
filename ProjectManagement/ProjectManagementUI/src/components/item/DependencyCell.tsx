@@ -7,7 +7,7 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { updateItemValue } from '../../store/features/itemSlice';
 import { selectAllItemsFlat } from '../../store/features/itemSlice';
 import Popover from '../common/Popover';
-import { FiPlus, FiGitBranch, FiX, FiCheck } from 'react-icons/fi'; // FiX importu eklendi
+import { FiPlus } from 'react-icons/fi'; // FiX importu eklendi
 
 // Props arayüzü (Hata 2304 düzeltildi: Tanım yukarıda mevcut olduğu için artık bulunabilir)
 interface DependencyCellProps {

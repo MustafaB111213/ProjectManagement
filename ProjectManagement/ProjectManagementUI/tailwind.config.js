@@ -19,7 +19,7 @@ export default {
 
         // Arayüz Renkleri
         'sidebar-bg': '#292f4c',
-        'main-bg': '#f6f7fb',
+        'main-bg': '#ffffffff',
         'card-bg': '#ffffff',
         'border-color': '#d0d4e4',
         'border-color-soft': '#e6e9ef',

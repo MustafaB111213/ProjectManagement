@@ -55,13 +55,12 @@ import GanttView from './GanttView';
 // Yardımcı fonksiyonlar ve ikonlar
 import { getRandomColor } from '../../utils/colors';
 import { FiPlus } from 'react-icons/fi';
+import { DEFAULT_ZOOM_INDEX } from '../common/constants';
 
 // Sabitler
 const AUTO_SCROLL_SPEED = 8;
 const AUTO_SCROLL_THRESHOLD = 100;
 
-// Gantt için Zoom Sabitleri
-const DEFAULT_ZOOM_INDEX = 4; // Varsayılan olarak 'day' (40px)
 
 const BoardView: React.FC = () => {
     // --- Redux State ve Dispatch ---
@@ -96,9 +95,10 @@ const BoardView: React.FC = () => {
     // --- Hesaplanan Değerler ---
     // Aktif görünüm tipini küçük harfe çevir ('table', 'gantt' veya undefined)
     const activeViewType = activeView?.type?.toLowerCase();
+    const isGanttView = activeViewType === 'gantt'; // Gantt özel muamele gerektirir
     // ----------------------------
 
-    // --- YENİ: Popover'dan seçilen tipe göre görünüm ekleme ---
+    // --- Popover'dan seçilen tipe göre görünüm ekleme ---
     const handleAddViewTypeSelected = useCallback((viewType: BoardViewTabInfo['type']) => {
         if (!selectedBoardId) return;
 
@@ -250,6 +250,11 @@ const BoardView: React.FC = () => {
 
     // --- Otomatik Kaydırma Mantığı ---
     const onDragUpdate = useCallback((update: DragUpdate) => {
+        // Sadece tablo görünümünde (dış scroll) çalış
+        if (activeViewType !== 'table' || !scrollContainerRef.current) {
+            setAutoScrollSpeed(0);
+            return;
+        }
         if (!scrollContainerRef.current) { setAutoScrollSpeed(0); return; }
         const containerRect = scrollContainerRef.current.getBoundingClientRect();
         const clientY = mouseYRef.current;
@@ -258,8 +263,11 @@ const BoardView: React.FC = () => {
         if (isNearTop) setAutoScrollSpeed(-AUTO_SCROLL_SPEED);
         else if (isNearBottom) setAutoScrollSpeed(AUTO_SCROLL_SPEED);
         else setAutoScrollSpeed(0);
-    }, []);
+    }, [activeViewType]);
     useEffect(() => {
+        // Sadece tablo görünümünde (dış scroll) çalış
+        if (activeViewType !== 'table') return;
+
         let animationFrameId: number;
         const performScroll = () => {
             if (autoScrollSpeed !== 0 && scrollContainerRef.current) {
@@ -269,114 +277,137 @@ const BoardView: React.FC = () => {
         };
         if (autoScrollSpeed !== 0) { animationFrameId = requestAnimationFrame(performScroll); }
         return () => { if (animationFrameId) cancelAnimationFrame(animationFrameId); };
-    }, [autoScrollSpeed]);
+    }, [autoScrollSpeed, activeViewType]);
     // ----------------------------------
 
     // --- Ana Render ---
     return (
         // Orijinal ana div (arka plan rengi yok)
-        <div className="p-4 h-full flex flex-col">
-            <BoardHeader />
-            {/* Orijinal Yapışkan Üst Alan (arka plan rengi yok) */}
-            <div className="sticky top-0 bg-white z-20 pt-2 mb-4"> {/* mb-4 eklendi, bg-white kaldı (orijinalde vardı) */}
-                {/* Orijinal Sekme Konteyneri (arka plan rengi yok, shadow yok) */}
-                <div className="border-b border-gray-200">
+        // Ana konteyner. Gantt ise ekranı kaplar (h-full),
+        // Tablo ise sayfanın normal akışında kalır (h-full YOK).
+        <div className={`p-4 flex flex-col ${isGanttView ? 'h-full' : ''}`}>
+            {/* --- YENİ YAPIŞKAN BAŞLIK BLOĞU --- */}
+            {/* 1. 'sticky top-0' ile tüm bloğu yapışkan yap.
+                2. 'bg-white' ile arka planı ver.
+                3. 'z-20' ile içeriğin üzerinde kalmasını sağla.
+                4. 'shadow-sm' ve 'border-b' ile hafifçe yükselt (Monday'de bu var).
+                5. İçeriğin (Board) kaydırılabilir alana yapışmaması için 'mb-4' ekle.
+            */}
+            {/* Tüm başlıklar artık bu tek yapışkan bloğun içinde */}
+            <div className="sticky top-0 bg-main-bg z-30 mb-2 ">
+                {/* 1. BoardHeader */}
+                <div className="px-4 pt-4 border-b">
+                    <BoardHeader />
+                </div>
+
+                {/* 2. BoardViewTabs (padding'i 'px-4' yap) */}
+                <div className="px-4 border-b">
                     <BoardViewTabs
                         views={boardViews.map(v => ({
                             id: v.id,
                             name: v.name,
-                            type: v.type.toLowerCase() as ('table' | 'gantt') // Tipi küçük harfe çevir
+                            type: v.type.toLowerCase() as ('table' | 'gantt' | 'calendar')
                         }))}
                         activeViewId={activeViewId}
                         onViewChange={(viewId) => dispatch(setActiveViewId(viewId as number))}
-                        // --- DEĞİŞTİ: onAddView yerine onAddViewTypeSelected ---
                         onAddViewTypeSelected={handleAddViewTypeSelected}
-                        // ----------------------------------------------------
                         onDeleteView={handleDeleteView}
                         onRenameView={handleRenameView}
                     />
                 </div>
-                {/* Orijinal Aksiyon Çubuğu Konteyneri (sadece tablo için, arka plan rengi yok, shadow yok) */}
-                <div className="py-2 border-b border-gray-200">
-                    <BoardActionbar />
-                </div>
-                {/* Orijinal kodda Gantt için ActionBar yoktu, o yüzden kaldırıldı */}
-                {/* {activeViewType === 'gantt' && (...) } */}
+                {/* 3. BoardActionbar (Sadece Tablo görünümünde göster) */}
+                {activeViewType === 'table' && (
+                    <div className="p-4">
+                        <BoardActionbar />
+                    </div>
+                )}
             </div>
+
+            {/* --- YAPIŞKAN BAŞLIK BLOĞU SONU --- */}
 
             {/* Hata veya Yüklenme Durumu Gösterimi */}
             {viewsStatus === 'loading' && <div className="p-4 text-center">Görünümler yükleniyor...</div>}
             {viewsStatus === 'failed' && <div className="p-4 text-center text-red-600">Hata: {viewsError}</div>}
 
             {/* Sürükle Bırak Alanı (views yüklenince göster) */}
-            {viewsStatus === 'succeeded' && (
-                <DragDropContext onDragEnd={onDragEnd} onDragUpdate={onDragUpdate} onDragStart={onDragStart} >
-                    {/* İçerik Alanı */}
-                    <div className="flex-1 overflow-hidden"> {/* Tüm alanı kapla ve iç scroll'ları yönet */}
-                        {!selectedBoardId ? (
-                            <div className="text-center p-8 text-gray-500">Lütfen bir pano seçin.</div>
-                        ) : !activeView ? (
-                            <div className="text-center p-8 text-gray-500">Aktif görünüm bulunamadı veya hiç görünüm yok.</div>
-                        ) : (
-                            // Aktif görünüme göre içeriği render et
-                            <>
-                                {/* Gantt Görünümü (GÜNCELLENDİ) */}
-                                {activeViewType === 'gantt' && (
-                                    <GanttView
-                                        boardId={selectedBoardId}
-                                        // GÜNCELLENDİ: Sadece viewId ve settingsJson'ı geç
-                                        // (veya tüm 'activeView' nesnesini)
-                                        viewId={activeView.id}
-                                        settingsJson={activeView.settingsJson}
+            {
+                viewsStatus === 'succeeded' && (
+                    <DragDropContext onDragEnd={onDragEnd} onDragUpdate={onDragUpdate} onDragStart={onDragStart} >
+                        {/* İçerik Alanı */}
+                        {/* GÜNCELLEME: İçerik Alanı */}
+                        {/* Gantt ise: Kalan alanı kapla (flex-1) ve iç scroll'u GanttView'e bırak (overflow-hidden) */}
+                        {/* Tablo ise: Hiçbir stil alma, sayfanın normal kaymasına izin ver. */}
+                        <div className={isGanttView ? 'flex-1 overflow-hidden' : 'bg-gray-50 rounded-md shadow-inner'}>
+                            {!selectedBoardId ? (
+                                <div className="text-center p-8 text-gray-500">Lütfen bir pano seçin.</div>
+                            ) : !activeView ? (
+                                <div className="text-center p-8 text-gray-500">Aktif görünüm bulunamadı veya hiç görünüm yok.</div>
+                            ) : (
+                                // Aktif görünüme göre içeriği render et
+                                <>
+                                    {/* Gantt Görünümü (GÜNCELLENDİ: 'h-full' eklendi) */}
+                                    {activeViewType === 'gantt' && (
+                                        <div className="h-full">
+                                            <GanttView
+                                                boardId={selectedBoardId}
+                                                viewId={activeView.id}
+                                                settingsJson={activeView.settingsJson}
+                                                zoomIndex={ganttZoomIndex}
+                                                onZoomIndexChange={setGanttZoomIndex}
+                                            />
+                                        </div>
+                                    )}
 
-                                        // Zoom state'i hala burada, sekmeler arası kalıcılık için
-                                        zoomIndex={ganttZoomIndex}
-                                        onZoomIndexChange={setGanttZoomIndex}
-                                    />
-                                )}
-
-                                {/* Tablo Görünümü */}
-                                {activeViewType === 'table' && (
-                                    <Droppable droppableId={selectedBoardId ? `board-${selectedBoardId}-groups` : 'board-disabled'} type="GROUP" >
-                                        {(providedDroppable) => (
-                                            <div
-                                                {...providedDroppable.droppableProps}
-                                                ref={(el) => { if (el) { providedDroppable.innerRef(el); (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el; } }}
-                                                className="h-full overflow-y-auto" // Dikey scroll sadece burada
-                                            >
-                                                <div className="space-y-4 px-1 pb-4"> {/* Gruplar arası boşluk ve padding */}
-                                                    {groups.map((group, index) => (
-                                                        <Draggable key={group.id} draggableId={`group-${group.id}`} index={index} >
-                                                            {(providedDraggable, snapshot) => (
-                                                                <div ref={providedDraggable.innerRef} {...providedDraggable.draggableProps} className="outline-none" style={{ ...providedDraggable.draggableProps.style, boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.1)' : 'none' }}>
-                                                                    <GroupSection
-                                                                        key={group.id}
-                                                                        group={group}
-                                                                        dragHandleProps={providedDraggable.dragHandleProps}
-                                                                        droppableId={`group-${group.id}`}
-                                                                        isCollapsed={collapsedGroupIds.has(group.id)}
-                                                                        onToggleCollapse={() => handleToggleGroup(group.id)}
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                        </Draggable>
-                                                    ))}
-                                                    {providedDroppable.placeholder}
+                                    {/* Tablo Görünümü (GÜNCELLENDİ: 'overflow-auto' ve 'h-full' KALDIRILDI) */}
+                                    {activeViewType === 'table' && (
+                                        <Droppable droppableId={selectedBoardId ? `board-${selectedBoardId}-groups` : 'board-disabled'} type="GROUP" >
+                                            {(providedDroppable) => (
+                                                <div
+                                                    {...providedDroppable.droppableProps}
+                                                    // GÜNCELLEME: Ref'i artık hem DND hem de auto-scroll için kullan
+                                                    ref={(el) => {
+                                                        providedDroppable.innerRef(el);
+                                                        (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+                                                    }}
+                                                    // 'h-full' ve 'overflow-y-auto' kaldırıldı.
+                                                    // Sayfa kaydırması artık etkin.
+                                                    className="p-2"
+                                                >
+                                                    <div className="space-y-4 px-1 pb-4"> {/* Gruplar arası boşluk ve padding */}
+                                                        {groups.map((group, index) => (
+                                                            <Draggable key={group.id} draggableId={`group-${group.id}`} index={index} >
+                                                                {(providedDraggable, snapshot) => (
+                                                                    <div ref={providedDraggable.innerRef} {...providedDraggable.draggableProps} className="outline-none" style={{ ...providedDraggable.draggableProps.style, boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.1)' : 'none' }}>
+                                                                        <GroupSection
+                                                                            key={group.id}
+                                                                            group={group}
+                                                                            dragHandleProps={providedDraggable.dragHandleProps}
+                                                                            droppableId={`group-${group.id}`}
+                                                                            isCollapsed={collapsedGroupIds.has(group.id)}
+                                                                            onToggleCollapse={() => handleToggleGroup(group.id)}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </Draggable>
+                                                        ))}
+                                                        {providedDroppable.placeholder}
+                                                    </div>
+                                                    {/* Yeni Grup Butonu (Orijinal hali) */}
+                                                    <button onClick={handleCreateGroupAtBottom} className="mt-4 mb-4 ml-1 flex items-center gap-x-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500" >
+                                                        <FiPlus className="w-4 h-4" /> Yeni Grup Ekle
+                                                    </button>
                                                 </div>
-                                                {/* Yeni Grup Butonu (Orijinal hali) */}
-                                                <button onClick={handleCreateGroupAtBottom} className="mt-4 mb-4 ml-1 flex items-center gap-x-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500" >
-                                                    <FiPlus className="w-4 h-4" /> Yeni Grup Ekle
-                                                </button>
-                                            </div>
-                                        )}
-                                    </Droppable>
-                                )}
-                            </>
-                        )}
-                    </div> {/* flex-1 sonu */}
-                </DragDropContext>
-            )}
-        </div>
+                                            )}
+                                        </Droppable>
+                                    )}
+                                </>
+                            )}
+                        </div> {/* flex-1 sonu */}
+                    </DragDropContext>
+                )
+            }
+        </div >
+
     );
 };
 

@@ -95,16 +95,16 @@ const BoardViewTabs: React.FC<BoardViewTabsProps> = ({
     };
 
     // Senin istediğin stil sınıfları
-    const activeTabStyle = 'text-brand-blue border-b-1 border-brand-blue'; // Senin kodundan
-    const inactiveTabStyle = 'text-text-secondary hover:text-text-primary'; // Senin kodundan
-    const commonTabStyle = 'group relative flex items-center gap-x-2 px-2 py-2 text-base font-medium transition-colors focus:outline-none'; // Senin kodundan
+    const activeTabStyle = 'text-brand-blue border-b-2 border-brand-blue'; // Senin kodundan
+    const inactiveTabStyle = 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'; // Senin kodundan
+    const commonTabStyle = 'group relative flex items-center gap-x-2 px-2 py-3 text-base font-medium transition-colors focus:outline-none'; // Senin kodundan
 
     return (
-        <div className="flex items-center border-b border-gray-200 :border-gray-700">
-             <nav className="flex-1 flex space-x-1 px-3" aria-label="Tabs">
+        <div className="flex items-center">
+             <nav className="flex-1 flex space-x-1" aria-label="Tabs">
                 {views.map(view => (
                     <div key={view.id} className="relative"> {/* Menü için relative konumlandırma */}
-                        <div
+                        <button
                             onClick={() => onViewChange(view.id)}
                             className={`${commonTabStyle} ${
                                 activeViewId === view.id ? activeTabStyle : inactiveTabStyle
@@ -122,7 +122,7 @@ const BoardViewTabs: React.FC<BoardViewTabsProps> = ({
                             >
                                 <FiMoreHorizontal className="w-4 h-4"/>
                             </button>
-                        </div>
+                        </button>
 
                         {/* Açılır Menü (Sadece bu sekme için menü açıksa göster) */}
                         {menuOpenForViewId === view.id && (
