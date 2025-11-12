@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react'; // Popover için hook'lar
+import React from 'react'; // Popover için hook'lar
 import {
     FiFilter, FiCalendar, FiChevronDown, FiPlus,
-    FiMinus, FiMoreHorizontal, FiUsers, FiSettings
+    FiMinus, FiMoreHorizontal, FiSettings
 } from 'react-icons/fi';
 
 export type ViewModeOption = 'day' | 'week' | 'month';

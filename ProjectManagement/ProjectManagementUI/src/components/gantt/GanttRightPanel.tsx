@@ -1,14 +1,13 @@
 // src/components/gantt/GanttRightPanel.tsx
 
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 // types.ts'den gerekli tüm tipleri import et
-import { type Group, type Item, type Column, ColumnType, type DependencyLink, type DependencyType, type User } from '../../types';
+import { type Group, type Item, type Column, ColumnType, type DependencyLink, type User } from '../../types';
 import TimelineHeader from './TimelineHeader';
 // date-fns'ten gerekli fonksiyonları import et
-import { parseISO, differenceInDays, addDays, format, max as maxDate, min as minDate } from 'date-fns';
+import { parseISO, differenceInDays, format } from 'date-fns';
 // Redux hook ve action'ı import et
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { updateItemValue } from '../../store/features/itemSlice';
+import { useAppSelector } from '../../store/hooks';
 
 // Yeni bileşenleri ve tipleri import et
 import GanttArrows, { type ProcessedItemData } from './GanttArrows';
@@ -19,8 +18,8 @@ import {
   GANTT_BAR_HEIGHT_PX,
   GANTT_BAR_TOP_OFFSET_PX
 } from '../common/constants'; // (Dosya yolunu kendinize göre düzeltin)
-import { checkDependencyViolations, type UpdatedTaskData } from '../../utils/ganttDependencies';
 import { selectAllUsers } from '../../store/features/userSlice';
+import { useGanttDragResize } from '../../hooks/useGanttDragResize';
 
 
 // --- YENİ YARDIMCI FONKSİYON ---
@@ -69,8 +68,7 @@ const STATUS_COLORS: { [key: string]: string } = {
   'Default': 'bg-gray-400',     // Her ihtimale karşı bir varsayılan
 };
 // --- GÜNCELLEME SONU ---
-// Yeniden boyutlandırma tarafı tipi
-type ResizeSide = 'start' | 'end';
+
 
 // Ana Component
 const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
@@ -90,23 +88,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
   onMouseLeaveBar
 }) => {
 
-  const dispatch = useAppDispatch();
   const paneRef = useRef<HTMLDivElement>(null);
-
-  // --- State'ler ---
-  //Hover Edilen Görevin ID'si 
   const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [draggedItemData, setDraggedItemData] = useState<ProcessedItemData | null>(null);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [initialDragOffsetDays, setInitialDragOffsetDays] = useState(0);
-
-  const [isResizing, setIsResizing] = useState(false);
-  const [resizedItemData, setResizedItemData] = useState<ProcessedItemData | null>(null);
-  const [resizeSide, setResizeSide] = useState<ResizeSide | null>(null);
-  const [resizeStartX, setResizeStartX] = useState(0);
-  const [originalStartDate, setOriginalStartDate] = useState<Date | null>(null);
-  const [originalEndDate, setOriginalEndDate] = useState<Date | null>(null);
 
   // --- YENİ: Redux'tan Kullanıcıları Al ---
   const allUsers = useAppSelector(selectAllUsers);
@@ -123,10 +106,27 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
   // Çubukları çizmek için BİRİNCİL ID'yi al
   const primaryTimelineId = activeTimelineIds.length > 0 ? activeTimelineIds[0] : null;
 
-  // Diğer aktif ID'ler (baseline'lar için)
-  const secondaryTimelineIds = activeTimelineIds.slice(1);
-  // --- Tüm Görev Verisini İşleme (useMemo) ---
-  // Bu veri, hem barların konumunu hem de okların çizimi için gerekli bilgileri içerir.
+  // --- HOOK KULLANIMI (Tüm karmaşık mantık burada) ---
+  const {
+    isDragging,
+    draggedItemData,
+    isResizing,
+    resizedItemData,
+    handleMouseDownOnBar,
+    handleMouseDownOnResizeHandle,
+    handlePaneMouseLeave,
+  } = useGanttDragResize({
+    paneRef,
+    items,
+    columns,
+    primaryTimelineId,
+    viewMinDate,
+    dayWidthPx,
+    onItemClick,
+    onDragStart: () => setHoveredItemId(null), // Sürükleme başladığında hover'ı sıfırla
+    onDragEnd: () => { },
+  });
+  // --- HOOK KULLANIMI SONU ---
 
   // GanttBarRow'dan çağrılır
   const handleBarMouseEnter = useCallback((itemId: number) => {
@@ -306,289 +306,6 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
     });
     return dataMap;
   }, [groups, items, primaryTimelineId, viewMinDate, collapsedGroupIds, dayWidthPx, labelById, colorByColumnId, dependencyColumnId,]);
-
-
-  // --- Sürükleme Olay Yöneticileri (Değişmedi, ProcessedItemData kullanıyor) ---
-
-  const handleMouseDownOnBar = useCallback((event: React.MouseEvent<HTMLDivElement>, itemData: ProcessedItemData) => {
-    if (isResizing || (event.target as HTMLElement).dataset.resizeHandle || event.button !== 0 || !itemData.barData) return;
-    // event.preventDefault(); // Tıklamanın 'mouseup'a ulaşması için bunu kaldırabiliriz
-    const paneRect = paneRef.current?.getBoundingClientRect();
-    if (!paneRect) return;
-
-    const startXCoord = event.clientX - paneRect.left;
-    let offsetDays = 0;
-    if (primaryTimelineId && itemData.item) {
-      const originalItem = items.find(i => i.id === itemData.item.id);
-      if (!originalItem) return;
-      const value = originalItem.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-      if (value) {
-        const [startStr] = value.split('/');
-        if (startStr) {
-          try {
-            const startDate = parseISO(startStr);
-            if (!isNaN(startDate.getTime())) {
-              offsetDays = differenceInDays(startDate, viewMinDate);
-            }
-          } catch { }
-        }
-      }
-    }
-    // Sürükleme başladığında hover'ı sıfırla
-    setHoveredItemId(null);
-    setIsDragging(true);
-    setDraggedItemData(itemData);
-    // DÜZELTME: Panele göre değil, pencereye göre X'i sakla
-    setDragStartX(event.clientX);
-    setInitialDragOffsetDays(offsetDays);
-  }, [viewMinDate, primaryTimelineId, isResizing, items]);
-
-  const handleMouseDownOnResizeHandle = useCallback((
-    event: React.MouseEvent<HTMLDivElement>,
-    itemData: ProcessedItemData,
-    side: ResizeSide
-  ) => {
-    if (event.button !== 0 || !itemData.barData || !primaryTimelineId) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const paneRect = paneRef.current?.getBoundingClientRect();
-    if (!paneRect) return;
-    const startXCoord = event.clientX - paneRect.left;
-
-    const originalItem = items.find(i => i.id === itemData.item.id);
-    if (!originalItem) return;
-
-    const currentValue = originalItem.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-    if (!currentValue) return;
-
-    try {
-      const [startStr, endStr] = currentValue.split('/');
-      const start = parseISO(startStr);
-      const end = parseISO(endStr);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) throw new Error("Geçersiz tarih");
-      setOriginalStartDate(start);
-      setOriginalEndDate(end);
-    } catch (e) { console.error("Resize başlarken tarih parse hatası:", e); return; }
-    setHoveredItemId(null);
-    setIsResizing(true);
-    setResizedItemData(itemData);
-    setResizeSide(side);
-    setResizeStartX(startXCoord);
-  }, [primaryTimelineId, items]);
-
-  // MouseMove, MouseUp ve useEffect hook'ları aynı kalır.
-  const handleMouseMove = useCallback((event: MouseEvent) => {
-    if (!isDragging && !isResizing) return;
-    const paneRect = paneRef.current?.getBoundingClientRect();
-    if (!paneRect) return;
-    const currentX = event.clientX - paneRect.left;
-
-    if (isDragging && draggedItemData) {
-      const deltaX = currentX - dragStartX;
-      const deltaDays = Math.round(deltaX / dayWidthPx);
-      // ... (anlık güncelleme için)
-    } else if (isResizing && resizedItemData /*...*/) {
-      const deltaX = currentX - resizeStartX;
-      const deltaDays = Math.round(deltaX / dayWidthPx);
-      // ... (anlık güncelleme için)
-    }
-  }, [
-    isDragging, draggedItemData, dragStartX,
-    isResizing, resizedItemData, resizeSide, resizeStartX, originalStartDate, originalEndDate,
-    dayWidthPx
-  ]);
-
-  // src/components/gantt/GanttRightPanel.tsx içinde yer alan handleMouseUp hook'u
-
-  const handleMouseUp = useCallback((event: MouseEvent) => {
-    const paneRect = paneRef.current?.getBoundingClientRect();
-
-    // Sadece drag veya resize aktifken işlem yap
-    if (!isDragging && !isResizing) {
-      return;
-    }
-
-    if (!paneRect) {
-      // Temizleme işlemi
-      setIsDragging(false); setDraggedItemData(null);
-      setIsResizing(false); setResizedItemData(null); setResizeSide(null);
-      setOriginalStartDate(null); setOriginalEndDate(null);
-      return;
-    }
-
-    const finalWindowX = event.clientX;
-    let needsUpdate = false;
-    let finalValue = "";
-    let finalItemId = -1;
-    let finalColumnId = -1;
-    let newStartDate: Date | null = null;
-    let newEndDate: Date | null = null;
-
-    const dragThreshold = 5; // Tıklama eşiği (5px)
-
-
-    // --- 1. Sürükleme Bitişi (Drag End) ---
-    if (isDragging && draggedItemData && draggedItemData.barData && primaryTimelineId) {
-      const windowDeltaX = finalWindowX - dragStartX;
-
-      // Tıklama Kontrolü
-      if (Math.abs(windowDeltaX) < dragThreshold) {
-        onItemClick(draggedItemData.item.id);
-      }
-      // Sürükleme Mantığı
-      else {
-        const originalItem = items.find(i => i.id === draggedItemData.item.id);
-        if (!originalItem) return;
-
-        const deltaDays = Math.round(windowDeltaX / dayWidthPx);
-
-        if (deltaDays !== 0) {
-          const newStartOffsetDays = initialDragOffsetDays + deltaDays;
-          const currentValue = originalItem.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-
-          if (currentValue) {
-            try {
-              const [startStr, endStr] = currentValue.split('/');
-              const originalEndDate = parseISO(endStr);
-              const duration = differenceInDays(originalEndDate, parseISO(startStr));
-
-              newStartDate = maxDate([addDays(viewMinDate, newStartOffsetDays), viewMinDate]);
-              newEndDate = addDays(newStartDate, Math.max(0, duration));
-
-              finalValue = `${format(newStartDate, 'yyyy-MM-dd')}/${format(newEndDate, 'yyyy-MM-dd')}`;
-              needsUpdate = finalValue !== currentValue;
-
-            } catch (e) { console.error("[DragEnd] Hata:", e); }
-          }
-        }
-
-        finalItemId = draggedItemData.item.id;
-        finalColumnId = primaryTimelineId;
-      }
-    }
-    // --- 2. Yeniden Boyutlandırma Bitişi (Resize End) ---
-    else if (isResizing && resizedItemData && resizeSide && originalStartDate && originalEndDate && primaryTimelineId) {
-      const paneFinalX = finalWindowX - paneRect.left;
-      const deltaX = paneFinalX - resizeStartX; // Panel'e göre fark
-      const deltaDays = Math.round(deltaX / dayWidthPx);
-
-      if (deltaDays !== 0) {
-        newStartDate = originalStartDate;
-        newEndDate = originalEndDate;
-
-        if (resizeSide === 'start') {
-          newStartDate = minDate([addDays(originalStartDate, deltaDays), originalEndDate as Date]);
-        } else {
-          newEndDate = maxDate([addDays(originalEndDate as Date, deltaDays), originalStartDate as Date]);
-        }
-
-        finalValue = `${format(newStartDate as Date, 'yyyy-MM-dd')}/${format(newEndDate as Date, 'yyyy-MM-dd')}`;
-
-        const originalItem = items.find(i => i.id === resizedItemData.item.id);
-        const currentValue = originalItem?.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-
-        needsUpdate = finalValue !== currentValue;
-      }
-      finalItemId = resizedItemData.item.id;
-      finalColumnId = primaryTimelineId;
-    }
-
-
-    // =========================================================
-    // --- KRİTİK: BAĞIMLILIK İHLAL KONTROLÜ ---
-    // =========================================================
-    if (needsUpdate && newStartDate && newEndDate) {
-      const updatedTask: UpdatedTaskData = {
-        itemId: finalItemId,
-        newStartDate: newStartDate,
-        newEndDate: newEndDate
-      };
-
-      // checkDependencyViolations fonksiyonu bu dosyada bulunmadığı için
-      // bu çağrı başarısız olacaktır. (import edildiği varsayılır.)
-      const violation = checkDependencyViolations(updatedTask, items, columns);
-
-      if (violation) {
-        // İhlal bulundu! Kaydetme işlemini iptal et.
-        needsUpdate = false;
-        alert(`BAĞIMLILIK İHLALİ:\n\n${violation.message}`);
-        console.error("Dependency Violation:", violation);
-      }
-    }
-    // =========================================================
-
-
-    // --- Dispatch ---
-    if (needsUpdate && finalItemId !== -1 && finalColumnId !== -1) {
-      dispatch(updateItemValue({
-        itemId: finalItemId,
-        columnId: finalColumnId,
-        value: finalValue,
-      }));
-    }
-
-    // Tüm eylemleri sıfırla (Aynı)
-    setIsDragging(false); setDraggedItemData(null);
-    setIsResizing(false); setResizedItemData(null); setResizeSide(null);
-    setOriginalStartDate(null); setOriginalEndDate(null);
-
-  }, [
-    isDragging, draggedItemData, dragStartX, initialDragOffsetDays,
-    isResizing, resizedItemData, resizeSide, resizeStartX, originalStartDate, originalEndDate,
-    viewMinDate, primaryTimelineId, dispatch, items, dayWidthPx, onItemClick, columns
-  ]);
-
-  // --- YENİ: Pane Mouse Leave Handler'ı (ZORLA SIFIRLAMA) ---
-  const handlePaneMouseLeave = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    // Yalnızca sürükleme veya boyutlandırma AKTİFSE ve mouse pencereden çıkarsa sıfırla.
-    if (isDragging || isResizing) {
-      console.log("Panele fare ayrıldı, sürükleme/boyutlandırma state'i sıfırlandı.");
-      handleMouseUp(event.nativeEvent); // MouseUp mantığını çağırarak temizleme yap
-    }
-  }, [isDragging, isResizing, handleMouseUp]);
-  // --- YENİ HANDLER SONU ---
-
-  useEffect(() => {
-    const isActionActive = isDragging || isResizing;
-
-    if (isActionActive) {
-      // --- YENİ KISIM BAŞLANGICI ---
-
-      // 1. Hangi imlecin gösterileceğine karar ver
-      let cursor = 'grabbing'; // 'Tutma' imleci
-      if (isResizing) {
-        cursor = 'ew-resize'; // 'Yatay boyutlandırma' (doğu-batı) imleci
-      }
-
-      // 2. İmleci tüm sayfa üzerinde global olarak ayarla
-      // Bu, imleç çubuğun dışına çıksa bile stilin korunmasını sağlar.
-      document.body.style.cursor = cursor;
-
-      // 3. Metin seçimini engelle (Ø ikonunun ana nedeni budur)
-      // Kullanıcı yanlışlıkla çubuktaki metni seçmeye çalışamaz.
-      document.body.style.userSelect = 'none';
-
-      // --- YENİ KISIM SONU ---
-
-      // Dinleyicileri ekle (Bu kısım aynı)
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('mouseleave', handleMouseUp); // Pencereden çıkarsa da bırak
-    }
-
-    // Cleanup fonksiyonu (Eylem bittiğinde veya component unmount olduğunda)
-    return () => {
-      // Dinleyicileri kaldır
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('mouseleave', handleMouseUp);
-
-      // --- YENİ KISIM: Stilleri sıfırla ---
-      // Sürükleme bittiğinde, body'deki stilleri varsayılana döndür.
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
   // --- RENDER KISMI ---
 

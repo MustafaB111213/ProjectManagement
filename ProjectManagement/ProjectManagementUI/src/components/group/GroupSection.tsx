@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Group, Column } from '../../types'; // Column tipini de import ediyoruz
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 
@@ -14,7 +14,7 @@ import Modal from '../common/Modal'; // Modal component'iniz
 import AddColumnForm from '../column/AddColumnForm'; // Yeni sütun ekleme formu
 import EditGroupForm from './EditGroupForm'; // Grup düzenleme formu
 import EditColumnForm from '../column/EditColumnForm'; // Sütun düzenleme formu
-import { FiPlus, FiMoreHorizontal, FiEdit, FiTrash2, FiChevronRight, FiChevronDown } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiChevronRight, FiChevronDown } from 'react-icons/fi';
 // DND props tipini import et (opsiyonel ama önerilir)
 import { Droppable, Draggable, type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 
@@ -172,9 +172,8 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, dragHandleProps, dro
                         {/* Yatay kaydırma için ek sarmalayıcı (isteğe bağlı, gerekirse) */}
                         <div className="overflow-x-auto">
                             <div className="min-w-max"> {/* İçeriğin daralmasını engelle */}
-                                {/* ================================================= */}
+
                                 {/* === SÜTUN BAŞLIĞI (DROPPABLE ALAN) === */}
-                                {/* ================================================= */}
                                 <Droppable
                                     droppableId="board-columns" // Tüm gruplar için aynı ID, çünkü tek bir başlık sırası var
                                     type="COLUMN"
@@ -284,14 +283,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, dragHandleProps, dro
                                         </div>
                                     )}
                                 </Droppable>
-
-                                {/* ================================================= */}
                                 {/* === SÜTUN BAŞLIĞI DROPPABLE ALAN SONU === */}
-                                {/* ================================================= */}
-
-                                {/* ================================================= */}
+                               
                                 {/* === ITEM'LAR İÇİN DROPPABLE (BIRAKILABİLİR ALAN) === */}
-                                {/* ================================================= */}
                                 <Droppable droppableId={droppableId} type="ITEM">
                                     {(providedDroppable, snapshotDroppable) => (
                                         <div
@@ -338,9 +332,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, dragHandleProps, dro
                                         </div>
                                     )}
                                 </Droppable>
-                                {/* ================================================= */}
                                 {/* === DROPPABLE ALAN SONU === */}
-                                {/* ================================================= */}
 
                                 {/* Yeni Görev Ekleme Satırı */}
                                 <div className="grid items-center border-t border-gray-200" style={{ gridTemplateColumns }}>

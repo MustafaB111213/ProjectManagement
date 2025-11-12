@@ -1,11 +1,11 @@
 // src/components/gantt/GanttArrows.tsx (GÜNCELLENDİ)
 
 import React, { useMemo } from 'react';
-import { type DependencyLink, type DependencyType } from '../../types';
+import { type DependencyLink } from '../../types';
 import { 
     GANTT_ROW_HEIGHT_PX, 
     GANTT_ARROW_VERTICAL_MID_OFFSET 
-} from '../common/constants'; // (Dosya yolunu kendinize göre düzeltin)
+} from '../common/constants'; 
 
 // Sabitler
 const ARROW_CORNER_RADIUS = 5; // Köşe yarıçapı
@@ -44,9 +44,7 @@ interface GanttArrowsProps {
     hoveredItemId: number | null;
 }
 
-    // ==================================================================
-    // --- HESAPLAMA HOOK'U (GÜNCELLENDİ) ---
-    // ==================================================================
+    // --- HESAPLAMA HOOK'U ---
     const useCalculateArrows = (processedData: Map<number, ProcessedItemData>): ArrowData[] => {
         return useMemo(() => {
             const arrowList: ArrowData[] = [];
@@ -79,7 +77,7 @@ interface GanttArrowsProps {
                     const hDir = sourceIsLeft ? -1 : 1; // Yatay çıkış yönü
                     const targetHDir = targetIsLeft ? -1 : 1; // Yatay giriş yönü
 
-                    // 1. Yatay (X) başlangıç ve bitiş noktaları (GÜNCELLENDİ)
+                    // 1. Yatay (X) başlangıç ve bitiş noktaları 
                     // Ok ucunun (marker) çubuğun içine girmesi için MARKER_WIDTH'ı KULLANIYORUZ.
                     // Okun yönü artık "auto" olacağı için, endX'i marker'ın genişliği kadar geriye çekiyoruz.
                     switch (link.type) {
@@ -92,9 +90,6 @@ interface GanttArrowsProps {
                     // 2. Dikey (Y) başlangıç ve bitiş noktaları (Aynı)
                     const startY = predBaseY + GANTT_ARROW_VERTICAL_MID_OFFSET;
                     const endY = succBaseY + GANTT_ARROW_VERTICAL_MID_OFFSET;
-
-
-                    // --- GÜNCELLENMİŞ YOL HESAPLAMA ---
 
                     // --- Aynı Satır (vDir === 0) ---
                     if (vDir === 0) {
@@ -166,7 +161,6 @@ interface GanttArrowsProps {
                                 `H ${endX}`;
                         }
                     }
-                    // --- GÜNCELLEME SONU ---
 
                     arrowList.push({ path: path, id: `arrow-${link.id}-${succId}-${link.type}` });
                 });
@@ -174,10 +168,7 @@ interface GanttArrowsProps {
             return arrowList;
         }, [processedData, GANTT_ROW_HEIGHT_PX, GANTT_ARROW_VERTICAL_MID_OFFSET]);
     };
-    // ==================================================================
     // --- HESAPLAMA HOOK'U SONU ---
-    // ==================================================================
-
 
 // GanttArrows bileşeni
 const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, totalHeight, hoveredItemId }) => {
@@ -220,13 +211,13 @@ const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, to
             className="absolute top-0 left-0 pointer-events-none"
             style={{ zIndex: 10 }}
         >
-            {/* GÜNCELLENDİ: Marker Tanımları */}
+            {/* Marker Tanımları */}
             <defs>
                 <marker
                     id="arrowhead-default" 
                     markerWidth={MARKER_WIDTH} 
                     markerHeight="6"
-                    // GÜNCELLENDİ: refX="0"
+                    // refX="0"
                     // Ok ucunun (polygon'daki '0 0' noktası), path'in bittiği yere
                     // (endX) oturmasını sağlar. Marker 0'dan 8'e kadar ileriye doğru çizilir.
                     refX="0" 
@@ -240,7 +231,7 @@ const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, to
                     id="arrowhead-highlight" 
                     markerWidth={MARKER_WIDTH} 
                     markerHeight="6"
-                    // GÜNCELLENDİ: refX="0"
+                    // refX="0"
                     refX="0" 
                     refY="3" 
                     orient="auto"
@@ -249,9 +240,8 @@ const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, to
                     <polygon points="0 0, 8 3, 0 6" fill={highlightColor} />
                 </marker>
             </defs>
-            {/* --- DÜZELTME SONU --- */}
             
-            {/* Hesaplanan okları çiz (Aynı) */}
+            {/* Hesaplanan okları çiz */}
             {arrows.map(arrow => {
                 const isHighlighted = arrowHighlightMap.get(arrow.id) || false;
                 const strokeColor = isHighlighted ? highlightColor : defaultColor;

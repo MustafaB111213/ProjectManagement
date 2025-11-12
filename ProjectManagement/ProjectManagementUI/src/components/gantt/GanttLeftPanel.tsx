@@ -36,7 +36,7 @@ interface GanttLeftPanelProps {
   hoveredItemId: number | null;
   // YENİ PROPLAR (PERFORMANS İÇİN)
     innerRef: React.Ref<HTMLDivElement>; // ScrollTop'u alacak iç div'in ref'i
-    onWheel: (event: React.WheelEvent<HTMLDivElement>) => void; // Tekerlek olayını parent'a ilet
+    onWheel?: (event: React.WheelEvent<HTMLDivElement>) => void; // Tekerlek olayını parent'a ilet
 }
 
 const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({

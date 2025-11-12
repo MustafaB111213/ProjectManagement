@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import Modal from '../common/Modal';
 import { format, parseISO } from 'date-fns'; // <-- HATA DÜZELTMESİ (TS2552, TS2304)
 import { type Item, type Group, type Column, ColumnType } from '../../types';
-import { FiCheckSquare, FiFileText, FiActivity, FiCheck, FiX } from 'react-icons/fi';
+import { FiFileText, FiActivity, FiCheck, FiX, FiPaperclip, FiPlus } from 'react-icons/fi';
 // --- Redux Hook'ları ve Eylemleri ---
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
@@ -82,8 +82,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
     const tabs = [
         { key: 'updates', label: 'Güncellemeler', icon: <FiFileText /> }, // FiFileText [8]
-        { key: 'files', label: 'Dosyalar', icon: <FiCheckSquare /> }, // FiCheckSquare [8]
+        { key: 'files', label: 'Dosyalar', icon: <FiPaperclip/> }, // FiCheckSquare [8]
         { key: 'activity', label: 'Etkinlik Günlüğü', icon: <FiActivity /> }, // FiActivity [8]
+        { key: 'more', label: '', icon: <FiPlus/>}
     ];
     const [itemName, setItemName] = useState(item.name);
     const [isEditingName, setIsEditingName] = useState(false);
