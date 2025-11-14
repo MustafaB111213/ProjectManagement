@@ -1,22 +1,41 @@
+// src/hooks/useGanttDragResize.ts
+// (Dosyanın tamamını bununla değiştir)
+
 import { useState, useCallback, useEffect, type RefObject } from 'react';
 import { type Item, type Column } from '../types';
+// YENİ: ProcessedItemData'yı import et (içindeki yeni alanı okumak için)
 import { type ProcessedItemData } from '../components/gantt/GanttArrows';
 import { useAppDispatch } from '../store/hooks';
 import { updateItemValue } from '../store/features/itemSlice';
-import { checkDependencyViolations, type UpdatedTaskData } from '../utils/ganttDependencies';
+import { checkDependencyViolations, type UpdatedTaskData, type Violation } from '../utils/ganttDependencies';
 import { parseISO, differenceInDays, addDays, format, max as maxDate, min as minDate } from 'date-fns';
 
 type ResizeSide = 'start' | 'end';
 
+interface DragResizeState {
+    item: Item;
+    timelineColumnId: number; // HANGİ kolonun sürüklendiğini tutar
+
+    // --- YENİ ALAN ---
+    // Bağımlılığın bağlı olduğu ana kolonun ID'si
+    primaryTimelineColumnId: number | null;
+    // --- YENİ ALAN SONU ---
+
+    originalStartDate: Date;
+    originalEndDate: Date;
+    originalMouseX: number;
+    side: ResizeSide | null;
+    isClickEvent: boolean;
+}
+
 interface GanttDragResizeProps {
     paneRef: RefObject<HTMLDivElement | null>;
-    items: Item[]; // Orijinal item verisi
-    columns: Column[]; // Bağımlılık kontrolü için
-    primaryTimelineId: number | null;
+    items: Item[];
+    columns: Column[];
     viewMinDate: Date;
     dayWidthPx: number;
     onItemClick: (itemId: number) => void;
-    onDragStart: () => void; // Hover'ı sıfırlamak için
+    onDragStart: () => void;
     onDragEnd: () => void;
 }
 
@@ -24,223 +43,228 @@ export const useGanttDragResize = ({
     paneRef,
     items,
     columns,
-    primaryTimelineId,
     viewMinDate,
     dayWidthPx,
     onItemClick,
-    onDragStart, // Renamed from onHoverStart
-    onDragEnd,   // Renamed from onHoverEnd
+    onDragStart,
+    onDragEnd,
 }: GanttDragResizeProps) => {
 
     const dispatch = useAppDispatch();
+    const [dragState, setDragState] = useState<DragResizeState | null>(null);
 
-    const [isDragging, setIsDragging] = useState(false);
-    const [draggedItemData, setDraggedItemData] = useState<ProcessedItemData | null>(null);
-    const [dragStartX, setDragStartX] = useState(0);
-    const [initialDragOffsetDays, setInitialDragOffsetDays] = useState(0);
+    const activeItemId = dragState?.item.id ?? null;
+    const isDragging = dragState !== null && dragState.side === null;
+    const isResizing = dragState !== null && dragState.side !== null;
 
-    const [isResizing, setIsResizing] = useState(false);
-    const [resizedItemData, setResizedItemData] = useState<ProcessedItemData | null>(null);
-    const [resizeSide, setResizeSide] = useState<ResizeSide | null>(null);
-    const [resizeStartX, setResizeStartX] = useState(0);
-    const [originalStartDate, setOriginalStartDate] = useState<Date | null>(null);
-    const [originalEndDate, setOriginalEndDate] = useState<Date | null>(null);
+    const dragThreshold = 5;
 
-    const dragThreshold = 5; // Tıklama eşiği (5px)
+    const getDatesFromItem = (item: Item, timelineColumnId: number): { startDate: Date, endDate: Date } | null => {
+        // ... (Bu fonksiyon aynı) ...
+        const value = item.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+        if (!value) return null;
+        try {
+            const [startStr, endStr] = value.split('/');
+            const startDate = parseISO(startStr);
+            const endDate = parseISO(endStr);
+            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+            return { startDate, endDate };
+        } catch {
+            return null;
+        }
+    };
 
     // --- MOUSE DOWN HANDLER'LARI ---
 
-    const handleMouseDownOnBar = useCallback((event: React.MouseEvent<HTMLDivElement>, itemData: ProcessedItemData) => {
-        if (isResizing || (event.target as HTMLElement).dataset.resizeHandle || event.button !== 0 || !itemData.barData) return;
-
-        const paneRect = paneRef.current?.getBoundingClientRect();
-        if (!paneRect) return;
-
-        let offsetDays = 0;
-        if (primaryTimelineId && itemData.item) {
-            const originalItem = items.find(i => i.id === itemData.item.id);
-            if (!originalItem) return;
-            const value = originalItem.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-            if (value) {
-                const [startStr] = value.split('/');
-                try {
-                    const startDate = parseISO(startStr);
-                    if (!isNaN(startDate.getTime())) {
-                        offsetDays = differenceInDays(startDate, viewMinDate);
-                    }
-                } catch { }
-            }
-        }
-
-        onDragStart(); // Hover'ı sıfırla
-        setIsDragging(true);
-        setDraggedItemData(itemData);
-        setDragStartX(event.clientX);
-        setInitialDragOffsetDays(offsetDays);
-    }, [viewMinDate, primaryTimelineId, isResizing, items, paneRef, onDragStart]);
-
-    const handleMouseDownOnResizeHandle = useCallback((
-        event: React.MouseEvent<HTMLDivElement>,
-        itemData: ProcessedItemData,
-        side: ResizeSide
+    // GÜNCELLENDİ: 'itemData'dan 'primaryTimelineColumnId'yi alır
+    const handleMouseDownOnBar = useCallback((
+        event: React.MouseEvent,
+        itemData: ProcessedItemData, // <-- Tipi ProcessedItemData
+        timelineColumnId: number
     ) => {
-        if (event.button !== 0 || !itemData.barData || !primaryTimelineId) return;
+        if (event.button !== 0 || (event.target as HTMLElement).dataset.resizeHandle) return;
+        event.stopPropagation();
+
+        const item = items.find(i => i.id === itemData.item.id);
+        if (!item) return;
+
+        const dates = getDatesFromItem(item, timelineColumnId);
+        if (!dates) return;
+
+        onDragStart();
+        setDragState({
+            item: item,
+            timelineColumnId: timelineColumnId,
+            // --- YENİ SATIR ---
+            // itemData'dan (GanttRightPanel'de eklediğimiz) ana barın ID'sini al
+            primaryTimelineColumnId: itemData.primaryTimelineColumnId,
+            // --- YENİ SATIR SONU ---
+            originalStartDate: dates.startDate,
+            originalEndDate: dates.endDate,
+            originalMouseX: event.clientX,
+            side: null,
+            isClickEvent: true,
+        });
+
+    }, [items, onDragStart]);
+
+    // GÜNCELLENDİ: 'itemData'dan 'primaryTimelineColumnId'yi alır
+    const handleMouseDownOnResizeHandle = useCallback((
+        event: React.MouseEvent,
+        itemData: ProcessedItemData, // <-- Tipi ProcessedItemData
+        side: ResizeSide,
+        timelineColumnId: number
+    ) => {
+        if (event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
 
-        const paneRect = paneRef.current?.getBoundingClientRect();
-        if (!paneRect) return;
-        const startXCoord = event.clientX - paneRect.left;
+        const item = items.find(i => i.id === itemData.item.id);
+        if (!item) return;
 
-        const originalItem = items.find(i => i.id === itemData.item.id);
-        if (!originalItem) return;
-        const currentValue = originalItem.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-        if (!currentValue) return;
+        const dates = getDatesFromItem(item, timelineColumnId);
+        if (!dates) return;
 
-        try {
-            const [startStr, endStr] = currentValue.split('/');
-            const start = parseISO(startStr);
-            const end = parseISO(endStr);
-            if (isNaN(start.getTime()) || isNaN(end.getTime())) throw new Error("Geçersiz tarih");
-            setOriginalStartDate(start);
-            setOriginalEndDate(end);
-        } catch (e) { console.error("Resize başlarken tarih parse hatası:", e); return; }
+        onDragStart();
+        setDragState({
+            item: item,
+            timelineColumnId: timelineColumnId,
+            // --- YENİ SATIR ---
+            primaryTimelineColumnId: itemData.primaryTimelineColumnId,
+            // --- YENİ SATIR SONU ---
+            originalStartDate: dates.startDate,
+            originalEndDate: dates.endDate,
+            originalMouseX: event.clientX,
+            side: side,
+            isClickEvent: false,
+        });
+    }, [items, onDragStart]);
 
-        onDragStart(); // Hover'ı sıfırla
-        setIsResizing(true);
-        setResizedItemData(itemData);
-        setResizeSide(side);
-        setResizeStartX(startXCoord);
-    }, [primaryTimelineId, items, paneRef, onDragStart]);
 
     // --- MOUSE MOVE/UP/LEAVE HANDLER'LARI ---
 
-    const handleMouseMove = useCallback((event: MouseEvent) => {
-        // Anlık görsel güncelleme için (sürüklerken çubuğu hareket ettirme)
-        // Bu, performansa etki edebilir, şimdilik boş bırakıldı.
-        // Sadece mouseUp'ta güncelleme yapacağız.
-    }, []);
-
-    const handleMouseUp = useCallback((event: MouseEvent) => {
-        const paneRect = paneRef.current?.getBoundingClientRect();
-        if ((!isDragging && !isResizing) || !paneRect) {
-            onDragEnd();
-            return;
+    const handlePaneMouseMove = useCallback((event: MouseEvent) => {
+        // ... (Bu fonksiyon aynı) ...
+        if (!dragState) return;
+        if (dragState.isClickEvent) {
+            const deltaX = event.clientX - dragState.originalMouseX;
+            if (Math.abs(deltaX) > dragThreshold) {
+                setDragState(prev => prev ? { ...prev, isClickEvent: false } : null);
+            }
         }
+    }, [dragState, dragThreshold]);
 
-        const finalWindowX = event.clientX;
+    // DÜZELTME: Fonksiyon adı 'handlePaneMouseUp' olarak değiştirildi
+    const handlePaneMouseUp = useCallback((event: MouseEvent) => {
+        if (!dragState) return;
+
         let needsUpdate = false;
-        let finalValue = "";
-        let finalItemId = -1;
-        let finalColumnId = -1;
         let newStartDate: Date | null = null;
         let newEndDate: Date | null = null;
 
-        if (isDragging && draggedItemData && draggedItemData.barData && primaryTimelineId) {
-            const windowDeltaX = finalWindowX - dragStartX;
-            if (Math.abs(windowDeltaX) < dragThreshold) {
-                onItemClick(draggedItemData.item.id);
-            } else {
-                const originalItem = items.find(i => i.id === draggedItemData.item.id);
-                if (originalItem) {
-                    const deltaDays = Math.round(windowDeltaX / dayWidthPx);
-                    if (deltaDays !== 0) {
-                        const newStartOffsetDays = initialDragOffsetDays + deltaDays;
-                        const currentValue = originalItem.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-                        if (currentValue) {
-                            try {
-                                const [startStr, endStr] = currentValue.split('/');
-                                const duration = differenceInDays(parseISO(endStr), parseISO(startStr));
-                                newStartDate = maxDate([addDays(viewMinDate, newStartOffsetDays), viewMinDate]);
-                                newEndDate = addDays(newStartDate, Math.max(0, duration));
-                                finalValue = `${format(newStartDate, 'yyyy-MM-dd')}/${format(newEndDate, 'yyyy-MM-dd')}`;
-                                needsUpdate = finalValue !== currentValue;
-                            } catch (e) { console.error("[DragEnd] Hata:", e); }
-                        }
-                    }
-                    finalItemId = draggedItemData.item.id;
-                    finalColumnId = primaryTimelineId;
-                }
-            }
-        } 
-        else if (isResizing && resizedItemData && resizeSide && originalStartDate && originalEndDate && primaryTimelineId) {
-            const paneFinalX = finalWindowX - paneRect.left;
-            const deltaX = paneFinalX - resizeStartX;
+        if (dragState.isClickEvent) {
+            onItemClick(dragState.item.id);
+        }
+        else {
+            const deltaX = event.clientX - dragState.originalMouseX;
             const deltaDays = Math.round(deltaX / dayWidthPx);
 
-            if (deltaDays !== 0) {
-                newStartDate = originalStartDate;
-                newEndDate = originalEndDate;
-                if (resizeSide === 'start') newStartDate = minDate([addDays(originalStartDate, deltaDays), originalEndDate]);
-                else newEndDate = maxDate([addDays(originalEndDate, deltaDays), originalStartDate]);
-                finalValue = `${format(newStartDate, 'yyyy-MM-dd')}/${format(newEndDate, 'yyyy-MM-dd')}`;
-                const originalItem = items.find(i => i.id === resizedItemData.item.id);
-                const currentValue = originalItem?.itemValues.find(v => v.columnId === primaryTimelineId)?.value;
-                needsUpdate = finalValue !== currentValue;
+            if (deltaDays === 0) {
+                needsUpdate = false;
             }
-            finalItemId = resizedItemData.item.id;
-            finalColumnId = primaryTimelineId;
+            else if (dragState.side === null) { // Sürükleme
+                const duration = differenceInDays(dragState.originalEndDate, dragState.originalStartDate);
+                newStartDate = addDays(dragState.originalStartDate, deltaDays);
+                newEndDate = addDays(newStartDate, Math.max(0, duration));
+                needsUpdate = true;
+            }
+            else if (dragState.side === 'start') { // Boyutlandırma (Başlangıç)
+                newStartDate = minDate([addDays(dragState.originalStartDate, deltaDays), dragState.originalEndDate]);
+                newEndDate = dragState.originalEndDate;
+                needsUpdate = true;
+            }
+            else if (dragState.side === 'end') { // Boyutlandırma (Bitiş)
+                newStartDate = dragState.originalStartDate;
+                newEndDate = maxDate([addDays(dragState.originalEndDate, deltaDays), dragState.originalStartDate]);
+                needsUpdate = true;
+            }
         }
 
         if (needsUpdate && newStartDate && newEndDate) {
-            const updatedTask: UpdatedTaskData = { itemId: finalItemId, newStartDate, newEndDate };
-            const violation = checkDependencyViolations(updatedTask, items, columns);
+
+            let violation: Violation | null = null;
+
+            // --- İSTEĞİNİN ÇÖZÜMÜ BURADA ---
+            // Sadece sürüklenen/boyutlanan bar, bağımlılıkların bağlı olduğu
+            // ANA bar ise kural ihlali kontrolü yap.
+            if (dragState.timelineColumnId === dragState.primaryTimelineColumnId) {
+                const updatedTask: UpdatedTaskData = { itemId: dragState.item.id, newStartDate, newEndDate };
+                violation = checkDependencyViolations(updatedTask, items, columns);
+            }
+            // (Eğer 'timelineColumnId' eşit değilse, 'violation' 'null' kalır
+            // ve kopya barın ihlal kontrolü atlanmış olur.)
+            // --- ÇÖZÜM SONU ---
+
             if (violation) {
-                needsUpdate = false;
                 alert(`BAĞIMLILIK İHLALİ:\n\n${violation.message}`);
+                needsUpdate = false;
+            }
+            else {
+                // Kural ihlali yoksa VEYA bu bir kopya bar ise, güncelle
+                const finalValue = `${format(newStartDate, 'yyyy-MM-dd')}/${format(newEndDate, 'yyyy-MM-dd')}`;
+                dispatch(updateItemValue({
+                    itemId: dragState.item.id,
+                    columnId: dragState.timelineColumnId, // Hangi bar sürüklendiyse onu günceller
+                    value: finalValue
+                }));
             }
         }
 
-        if (needsUpdate) {
-            dispatch(updateItemValue({ itemId: finalItemId, columnId: finalColumnId, value: finalValue }));
-        }
-
-        // Temizleme
-        setIsDragging(false); setDraggedItemData(null);
-        setIsResizing(false); setResizedItemData(null); setResizeSide(null);
-        setOriginalStartDate(null); setOriginalEndDate(null);
+        setDragState(null);
         onDragEnd();
 
-    }, [
-        isDragging, draggedItemData, dragStartX, initialDragOffsetDays,
-        isResizing, resizedItemData, resizeSide, resizeStartX, originalStartDate, originalEndDate,
-        viewMinDate, primaryTimelineId, dispatch, items, dayWidthPx, onItemClick, columns, paneRef, onDragEnd
-    ]);
-
+    }, [dragState, dayWidthPx, dispatch, items, columns, onItemClick, onDragEnd]);
+    // DÜZELTME: handlePaneMouseUp'ı çağırır
     const handlePaneMouseLeave = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-        if (isDragging || isResizing) {
-            handleMouseUp(event.nativeEvent);
+        if (dragState) {
+            handlePaneMouseUp(event.nativeEvent);
         }
-    }, [isDragging, isResizing, handleMouseUp]);
+    }, [dragState, handlePaneMouseUp]);
 
     // --- useEffect (Global Dinleyiciler) ---
+    // DÜZELTME: Bağımlılıkları 'handlePane...' olarak günceller
     useEffect(() => {
-        const isActionActive = isDragging || isResizing;
-        if (isActionActive) {
-            let cursor = isResizing ? 'ew-resize' : 'grabbing';
+        if (dragState) {
+            let cursor = 'grabbing';
+            if (dragState.side === 'start' || dragState.side === 'end') {
+                cursor = 'ew-resize';
+            }
+
             document.body.style.cursor = cursor;
             document.body.style.userSelect = 'none';
 
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-            window.addEventListener('mouseleave', handleMouseUp);
+            window.addEventListener('mousemove', handlePaneMouseMove);
+            window.addEventListener('mouseup', handlePaneMouseUp);
         }
         return () => {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-            window.removeEventListener('mouseleave', handleMouseUp);
+            window.removeEventListener('mousemove', handlePaneMouseMove);
+            window.removeEventListener('mouseup', handlePaneMouseUp);
         };
-    }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+    }, [dragState, handlePaneMouseMove, handlePaneMouseUp]);
 
     return {
         isDragging,
-        draggedItemData,
         isResizing,
-        resizedItemData,
+        draggedItemData: isDragging ? dragState : null,
+        resizedItemData: isResizing ? dragState : null,
+
         handleMouseDownOnBar,
         handleMouseDownOnResizeHandle,
+
+        // DÜZELTME: Artık 'return' bloğu, tanımlanan fonksiyonlarla eşleşiyor
         handlePaneMouseLeave,
+
     };
 };

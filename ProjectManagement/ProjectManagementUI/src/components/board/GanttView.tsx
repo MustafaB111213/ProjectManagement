@@ -1,36 +1,24 @@
-// src/components/board/GanttView.tsx (HATALAR DÜZELTİLDİ)
+// src/components/board/GanttView.tsx (GÜNCELLENMİŞ)
 
-// GÜNCELLEME: Duplicate import'lar temizlendi
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { ColumnType, type Group, type Item } from '../../types';
-
-// Redux
 import { selectAllGroups } from '../../store/features/groupSlice';
 import { selectAllItemsFlat } from '../../store/features/itemSlice';
 import { selectAllColumns } from '../../store/features/columnSlice';
 import { selectSelectedBoard } from '../../store/features/boardSlice';
 import { updateBoardViewSettings } from '../../store/features/boardViewSlice';
-
-// Bileşenler
 import GanttToolbar, { type ViewModeOption } from '../gantt/GanttToolbar';
 import GanttLeftPanel from '../gantt/GanttLeftPanel';
 import GanttRightPanel from '../gantt/GanttRightPanel';
-import GanttBaselineModal from '../gantt/GanttBaselineModal';
-import ItemDetailModal from '../item/ItemDetailModal';
-
-// Utils
 import { format, addMonths, subMonths, differenceInDays, subYears, addYears, isValid, parseISO, addDays } from 'date-fns';
-// GÜNCELLEME: Duplicate import'lar temizlendi
 import { debounce } from 'lodash';
 import { DEFAULT_ZOOM_INDEX, MAX_ZOOM_INDEX, ZOOM_STEPS, GANTT_ROW_HEIGHT_PX } from '../common/constants';
-
-// Custom Hooks
+import GanttBaselineModal from '../gantt/GanttBaselineModal';
+import ItemDetailModal from '../item/ItemDetailModal';
 import { useGanttSettings } from '../../hooks/useGanttSettings';
 import { useGanttTimeline } from '../../hooks/useGanttTimeline';
 import { usePanelSync } from '../../hooks/usePanelSync';
-
-// İkonlar
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 // --- LOKAL SABİTLER ---
@@ -49,7 +37,7 @@ interface GanttViewProps {
     boardId: number;
     viewId: number;
     settingsJson: string | null | undefined;
-    zoomIndex: number;
+    zoomIndex: number; // Bu hala dışarıdan geliyor (BoardView'den)
     onZoomIndexChange: (index: number) => void;
 }
 interface GanttSettings {
@@ -83,12 +71,12 @@ const GanttView: React.FC<GanttViewProps> = ({
         setActiveTimelineIds, setGroupByColumnId, setColorByColumnId, setLabelById
     } = settingsState;
 
-    // --- 3. REF'LER (Hook'lardan ÖNCE tanımlanmalı) ---
+    // --- 3. REF'LER ---
     const rightPanelScrollRef = useRef<HTMLDivElement>(null);
     const leftPanelInnerRef = useRef<HTMLDivElement>(null);
     const totalHeightRef = useRef(0);
 
-    // --- 4. VERİ İŞLEME (useMemo) (Hook'lardan ÖNCE tanımlanmalı) ---
+    // --- 4. VERİ İŞLEME (useMemo) ---
     const projectDateRange = useMemo(() => {
         const primaryTimelineId = activeTimelineIds.length > 0 ? activeTimelineIds[0] : null;
         if (!primaryTimelineId || allItems.length === 0) return { minDate: null, maxDate: null };
@@ -104,30 +92,34 @@ const GanttView: React.FC<GanttViewProps> = ({
                             if (!minDate || sd < minDate) minDate = sd;
                             if (!maxDate || ed > maxDate) maxDate = ed;
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             }
         }
         return { minDate, maxDate };
     }, [allItems, activeTimelineIds]);
-    
+
     // --- 5. ZAMAN ÇİZELGESİ YÖNETİMİ (Custom Hook) ---
-    // (Artık ref'ler ve projectDateRange tanımlandıktan *sonra* çağrılıyor)
-    const { 
-        viewMinDate, viewMaxDate, setViewMinDate, setViewMaxDate,
+    const {
+        viewMinDate, viewMaxDate, setViewMinDate, setViewMaxDate, // GÜNCELLEME: set'ler artık modal'a geçilmiyor
         currentDayWidth, currentLevelLabel,
-        debouncedLoadMore, timelineHandlers 
+        debouncedLoadMore,
+        scrollToDate,
+        handleViewModeChange,
+        handleZoomIn,
+        handleZoomOut,
+        handleAutoFit
     } = useGanttTimeline({
         projectDateRange,
-        zoomIndex, 
-        onZoomIndexChange, 
+        zoomIndex,
+        onZoomIndexChange,
         rightPanelScrollRef
     });
 
     // --- 6. PANEL SENKRONİZASYONU (Custom Hook) ---
-    const { 
-        handleScroll, 
-        handleLeftPanelWheel 
+    const {
+        handleScroll,
+        handleLeftPanelWheel
     } = usePanelSync(debouncedLoadMore, leftPanelInnerRef, rightPanelScrollRef);
 
     // --- 7. LOKAL UI STATE'LERİ ---
@@ -170,7 +162,7 @@ const GanttView: React.FC<GanttViewProps> = ({
         visibleGroups.forEach(g => { count++; count += displayData.items.filter(i => i.groupId === g.id).length; });
         return count > 0 ? count - 1 : 0;
     }, [displayData.groups, displayData.items, collapsedGroupIds]);
-    
+
     useEffect(() => {
         totalHeightRef.current = (maxRowIndex + 1) * GANTT_ROW_HEIGHT_PX;
     }, [maxRowIndex]);
@@ -191,7 +183,7 @@ const GanttView: React.FC<GanttViewProps> = ({
     };
     const handleToggleLeftPanel = useCallback(() => setIsLeftPanelOpen(prev => !prev), []);
     const handleOpenWidgetModal = () => setIsWidgetModalOpen(true);
-    
+
     // --- 10. YÜKLENME/HATA DURUMLARI ---
     const isLoading = columnStatus !== 'succeeded' || allGroups.length === 0;
     if (isLoading) {
@@ -205,33 +197,34 @@ const GanttView: React.FC<GanttViewProps> = ({
     return (
         <div className="flex flex-col h-full w-full border border-gray-200 rounded-lg shadow-sm overflow-hidden bg-white relative">
             <GanttToolbar
-                scrollToDate={timelineHandlers.scrollToDate}
+                scrollToDate={scrollToDate}
                 currentLevelLabel={currentLevelLabel}
-                onViewModeChange={timelineHandlers.handleViewModeChange}
-                onZoomIn={timelineHandlers.handleZoomIn}
-                onZoomOut={timelineHandlers.handleZoomOut}
+                onViewModeChange={handleViewModeChange}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
                 zoomIndex={zoomIndex}
                 maxZoomIndex={MAX_ZOOM_INDEX}
                 onSettingsClick={handleOpenWidgetModal}
-                onAutoFit={timelineHandlers.handleAutoFit}
+                onAutoFit={handleAutoFit}
                 isSettingsOpen={isWidgetModalOpen}
             />
 
             <div className="flex-1 flex w-full relative overflow-hidden">
-                <div className={`flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isLeftPanelOpen ? 'w-[400px]' : 'w-0'} relative`}>
+                <div className={`flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isLeftPanelOpen ? 'w-[420px]' : 'w-0'} relative`}>
                     <div
-                        className="w-[400px] h-full overflow-y-hidden overflow-x-hidden border-r"
+                        className="w-[426px] h-full overflow-y-hidden overflow-x-hidden border-r"
                         onWheel={(e) => handleLeftPanelWheel(e.deltaY)}
                     >
                         <GanttLeftPanel
                             innerRef={leftPanelInnerRef}
-                            // GÜNCELLEME: 'onWheel' prop'u GanttLeftPanel'den kaldırıldı (Hata 7)
                             groups={displayData.groups}
                             items={displayData.items}
                             collapsedGroupIds={collapsedGroupIds}
                             onToggleGroup={handleToggleGroup}
                             onItemClick={handleItemClick}
                             hoveredItemId={hoveredItemId}
+                            columns={allColumns}
+                            activeTimelineIds={settingsState.activeTimelineIds}
                         />
                     </div>
                 </div>
@@ -246,7 +239,7 @@ const GanttView: React.FC<GanttViewProps> = ({
                         {isLeftPanelOpen ? <FiChevronLeft size={18} /> : <FiChevronRight size={18} />}
                     </button>
                 </div>
-                
+
                 <div
                     ref={rightPanelScrollRef}
                     className="flex-1 w-full overflow-auto"
@@ -269,7 +262,8 @@ const GanttView: React.FC<GanttViewProps> = ({
                     />
                 </div>
             </div>
-            
+
+            {/* GÜNCELLEME: Modal'a artık daha az prop geçiliyor */}
             {boardId && (
                 <GanttBaselineModal
                     isOpen={isWidgetModalOpen}
@@ -278,6 +272,8 @@ const GanttView: React.FC<GanttViewProps> = ({
                     initialOpenSection={null}
                     groups={displayData.groups}
                     items={displayData.items}
+
+                    // Sadece Ayarlar ve Ayar Handler'ları
                     activeTimelineIds={activeTimelineIds}
                     onTimelineColumnChange={(ids) => {
                         setActiveTimelineIds(ids);
@@ -298,18 +294,9 @@ const GanttView: React.FC<GanttViewProps> = ({
                         setLabelById(id);
                         settingsHandlers.handleLabelByChange(id);
                     }}
-                    zoomIndex={zoomIndex}
-                    setZoomIndex={onZoomIndexChange} 
-                    viewMinDate={viewMinDate}
-                    setViewMinDate={setViewMinDate}
-                    viewMaxDate={viewMaxDate}
-                    setViewMaxDate={setViewMaxDate}
-                    collapsedGroupIds={collapsedGroupIds}
-                    setCollapsedGroupIds={setCollapsedGroupIds}
-                    hoveredItemId={hoveredItemId}
-                    setHoveredItemId={setHoveredItemId}
-                    isLeftPanelOpen={isLeftPanelOpen}
-                    setIsLeftPanelOpen={setIsLeftPanelOpen}
+
+                    // Başlangıç zoom seviyesini ana sayfadan al
+                    initialZoomIndex={zoomIndex}
                 />
             )}
 
@@ -320,7 +307,6 @@ const GanttView: React.FC<GanttViewProps> = ({
                     item={selectedItem}
                     group={selectedGroup}
                     columns={allColumns}
-                    // GÜNCELLEME: Null kontrolü eklendi (Hata 12)
                     boardName={selectedBoard?.name || 'Pano'}
                     allItems={allItems}
                 />
@@ -330,5 +316,3 @@ const GanttView: React.FC<GanttViewProps> = ({
 };
 
 export default GanttView;
-
-// GÜNCELLEME: Dosyanın sonundaki 'usePanelSync' kopyası kaldırıldı.

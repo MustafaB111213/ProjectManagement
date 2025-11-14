@@ -104,7 +104,7 @@ const BoardViewTabs: React.FC<BoardViewTabsProps> = ({
              <nav className="flex-1 flex space-x-1" aria-label="Tabs">
                 {views.map(view => (
                     <div key={view.id} className="relative"> {/* Menü için relative konumlandırma */}
-                        <button
+                        <div
                             onClick={() => onViewChange(view.id)}
                             className={`${commonTabStyle} ${
                                 activeViewId === view.id ? activeTabStyle : inactiveTabStyle
@@ -122,7 +122,7 @@ const BoardViewTabs: React.FC<BoardViewTabsProps> = ({
                             >
                                 <FiMoreHorizontal className="w-4 h-4"/>
                             </button>
-                        </button>
+                        </div>
 
                         {/* Açılır Menü (Sadece bu sekme için menü açıksa göster) */}
                         {menuOpenForViewId === view.id && (

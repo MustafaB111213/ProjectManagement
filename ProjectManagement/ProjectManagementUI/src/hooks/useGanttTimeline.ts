@@ -1,19 +1,17 @@
 // src/hooks/useGanttTimeline.ts (GÜNCELLENMİŞ)
 
-import { useState, useRef, useEffect, useCallback, type RefObject } from 'react';
-import { addMonths, subMonths, differenceInDays, subYears, addYears, isValid } from 'date-fns';
+import { useState, useMemo, useRef, useEffect, useCallback, type RefObject,  } from 'react';
+import { format, addMonths, subMonths, differenceInDays, subYears, addYears, isValid, addDays, parseISO } from 'date-fns';
 import { debounce } from 'lodash';
-import { MAX_ZOOM_INDEX, ZOOM_STEPS } from '../components/common/constants';
 import type { ViewModeOption } from '../components/gantt/GanttToolbar';
+import { DEFAULT_ZOOM_INDEX, MAX_ZOOM_INDEX, ZOOM_STEPS } from '../components/common/constants';
 
 type ProjectDateRange = { minDate: Date | null, maxDate: Date | null };
 
-// GÜNCELLEME 1: Hook'un prop arayüzü
 interface GanttTimelineProps {
     projectDateRange: ProjectDateRange;
     zoomIndex: number;
     onZoomIndexChange: (index: number) => void;
-    // GÜNCELLEME: Tip 'null' olabilir olarak düzeltildi
     rightPanelScrollRef: RefObject<HTMLDivElement | null>; 
 }
 
@@ -64,7 +62,7 @@ export const useGanttTimeline = ({
                 return newMax;
             });
         }
-    }, 300), [loadMoreMonthsAmount, isLoadingMorePast, isLoadingMoreFuture]); // Bağımlılıklar düzeltildi
+    }, 300), [loadMoreMonthsAmount, isLoadingMorePast, isLoadingMoreFuture]);
 
     // --- TEMEL FONKSİYONLAR ---
     const scrollToDate = useCallback((date: Date, behavior: 'smooth' | 'auto' = 'smooth') => {
@@ -107,7 +105,6 @@ export const useGanttTimeline = ({
     }, [zoomIndex, currentDayWidth, viewMinDate, onZoomIndexChange, rightPanelScrollRef]);
 
     // --- EFFECT'LER ---
-    // 'focusDate' tetikleyicisi (AutoFit için)
     useEffect(() => {
         if (focusDate) {
             scrollToDate(focusDate, 'auto');
@@ -115,7 +112,6 @@ export const useGanttTimeline = ({
         }
     }, [focusDate, scrollToDate]);
 
-    // İlk yüklemede "Bugün"e kaydır
     useEffect(() => {
         if (initialScrollDone.current || !isValid(viewMinDate) || !rightPanelScrollRef.current) {
             return;
@@ -132,7 +128,7 @@ export const useGanttTimeline = ({
         let targetIndex: number;
         if (newMode === 'week') targetIndex = 6;
         else if (newMode === 'month') targetIndex = 2;
-        else targetIndex = 10; // DEFAULT_ZOOM_INDEX
+        else targetIndex = DEFAULT_ZOOM_INDEX;
         updateZoomIndexAndScroll(() => targetIndex);
     }, [updateZoomIndexAndScroll]);
 
@@ -153,21 +149,20 @@ export const useGanttTimeline = ({
         setFocusDate(minDate); // Kaydırmayı tetikle
     }, [projectDateRange, onZoomIndexChange]);
 
-    // GÜNCELLEME 2: Hook'un return ifadesi
+    // GÜNCELLEME: Hook artık tüm state'leri ve handler'ları döndürüyor
     return {
         viewMinDate,
         viewMaxDate,
-        setViewMinDate, // <-- Hata 6 için eklendi
-        setViewMaxDate, // <-- Hata 7 için eklendi
+        setViewMinDate, // <-- Modal için eklendi
+        setViewMaxDate, // <-- Modal için eklendi
         currentDayWidth,
         currentLevelLabel,
         debouncedLoadMore,
-        timelineHandlers: {
-            scrollToDate,
-            handleViewModeChange,
-            handleZoomIn,
-            handleZoomOut,
-            handleAutoFit
-        }
+        // Handler'lar
+        scrollToDate,
+        handleViewModeChange,
+        handleZoomIn,
+        handleZoomOut,
+        handleAutoFit
     };
 };
