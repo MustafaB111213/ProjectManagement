@@ -171,7 +171,10 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
             size="9xl"
             disableContentScroll={true}
         >
-            <div className="flex flex-col h-[100vh] w-full bg-white">
+            {/* DÜZELTME 1: h-[100vh] yerine h-[calc(100vh-6rem)] kullanıldı.
+                Bu, Modal'ın kendi padding'i ve ekran kenar boşlukları için alt kısımdan 
+                pay bırakır ve scrollbar'ın görünür alana çıkmasını sağlar. */}
+            <div className="flex flex-col h-[calc(100vh-6rem)] w-full bg-white">
 
                 {/* Toolbar (Lokal handler'ları kullanır) */}
                 <div className="flex-shrink-0 pt-6 pb-0 px-4">
@@ -194,12 +197,14 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
 
                     {/* SOL/GANTT ÖNİZLEME ALANI */}
                     <div className={`flex-1 h-full flex w-full relative transition-all duration-300 ${isSettingsOpen ? 'max-w-[calc(100%-400px)]' : 'max-w-full'}`}>
-                        {/* Sol Panel (Lokal state ve ref'leri kullanır) */}
-                        <div className={`flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isLeftPanelOpen ? 'w-[300px]' : 'w-0'} relative`}>
-                            <div
-                                className="w-[300px] h-full overflow-y-hidden overflow-x-hidden border-r"
-                                onWheel={(e) => modalHandleLeftPanelWheel(e.deltaY)}
-                            >
+
+                        {/* Sol Panel Wrapper - DÜZELTİLDİ */}
+                        {/* width style olarak verildi çünkü dinamik */}
+                        <div className={`flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isLeftPanelOpen ? 'w-[420px]' : 'w-0'} relative`}>
+                    <div
+                        className="w-[426px] h-full overflow-y-hidden overflow-x-hidden border-r"
+                        onWheel={(e) => modalHandleLeftPanelWheel(e.deltaY)}
+                    >
                                 <GanttLeftPanel
                                     innerRef={modalLeftPanelInnerRef}
                                     groups={groups}
@@ -207,8 +212,6 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                     collapsedGroupIds={collapsedGroupIds}
                                     onToggleGroup={handleToggleGroup}
                                     hoveredItemId={hoveredItemId}
-                                    // --- EKSİK PROPLAR (BURAYI DA EKLE) ---
-                                    // (allColumns ve activeTimelineIds'ye bu component'te erişmen lazım)
                                     columns={allColumns}
                                     activeTimelineIds={activeTimelineIds}
                                 />
@@ -235,10 +238,14 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                             </button>
                         </div>
 
-                        {/* Sağ Panel (Lokal state ve ref'leri kullanır) */}
+                        {/* Sağ Panel (GanttRightPanel) */}
+                        {/* DÜZELTME 2: overflow-x-auto EKLENDİ ve pb-12 korundu */}
                         <div
                             ref={modalRightPanelScrollRef}
-                            className="flex-1 w-full overflow-auto"
+                            // overflow-x-auto: Yatay kaydırmayı zorlar.
+                            // min-h-0: Flex taşmasını önler.
+                            // pb-12: En alttaki öğenin scrollbar'ın altında kalmamasını sağlar.
+                            className="flex-1 w-full overflow-x-auto overflow-y-auto min-h-0 pb-12"
                             onScroll={modalHandleScroll}
                         >
                             <GanttRightPanel
