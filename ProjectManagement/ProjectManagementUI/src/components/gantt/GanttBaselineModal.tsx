@@ -3,15 +3,15 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppSelector } from '../../store/hooks';
 import Modal from '../common/Modal';
-import GanttToolbar, { type ViewModeOption } from './GanttToolbar';
+import GanttToolbar from './GanttToolbar';
 import GanttLeftPanel from './GanttLeftPanel';
 import GanttRightPanel from './GanttRightPanel';
 import GanttSettingsPanel from './GanttSettingsPanel';
 import { selectAllColumns } from '../../store/features/columnSlice';
-import { ColumnType, type Group, type Item } from '../../types';
-import { format, isValid, parseISO } from 'date-fns'; // Sadece gerekli olanlar
+import { type Group, type Item } from '../../types';
+import { isValid, parseISO } from 'date-fns'; // Sadece gerekli olanlar
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { ZOOM_STEPS, MAX_ZOOM_INDEX } from '../common/constants';
+import { MAX_ZOOM_INDEX } from '../common/constants';
 import { usePanelSync } from '../../hooks/usePanelSync';
 // GÜNCELLEME: Modal artık kendi timeline hook'unu kullanacak
 import { useGanttTimeline } from '../../hooks/useGanttTimeline';
@@ -98,11 +98,10 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
         return { minDate, maxDate };
     }, [items, activeTimelineIds]);
 
-    // --- GÜNCELLEME: Modal KENDİ Timeline Hook'unu kullanıyor ---
+    // --- Modal KENDİ Timeline Hook'unu kullanıyor ---
     const {
         viewMinDate, viewMaxDate,
         currentDayWidth, currentLevelLabel,
-        debouncedLoadMore,
         scrollToDate,
         handleViewModeChange,
         handleZoomIn,
@@ -115,7 +114,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
         rightPanelScrollRef: modalRightPanelScrollRef // Modal'ın ref'ini kullan
     });
 
-    // --- GÜNCELLEME: Modal KENDİ Panel Senkronizasyonunu kullanıyor ---
+    // --- Modal KENDİ Panel Senkronizasyonunu kullanıyor ---
     const modalDebouncedLoadMore = useCallback(() => { }, []);
     const {
         handleScroll: modalHandleScroll,
@@ -174,7 +173,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
         >
             <div className="flex flex-col h-[100vh] w-full bg-white">
 
-                {/* Toolbar (GÜNCELLENDİ: Lokal handler'ları kullanır) */}
+                {/* Toolbar (Lokal handler'ları kullanır) */}
                 <div className="flex-shrink-0 pt-6 pb-0 px-4">
                     <GanttToolbar
                         scrollToDate={scrollToDate}
@@ -253,6 +252,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                 dayWidthPx={currentDayWidth}
                                 colorByColumnId={colorByColumnId}
                                 labelById={labelById}
+                                scrollContainerRef={modalRightPanelScrollRef}
                                 onItemClick={() => { }}
                                 onMouseEnterBar={handleItemMouseEnter}
                                 onMouseLeaveBar={handleItemMouseLeave}

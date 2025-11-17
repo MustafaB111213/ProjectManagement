@@ -48,7 +48,7 @@ namespace ProjectManagement.Data.Repositories
             {
                 // Hiç item yoksa, ilk item'ın sırası için -1 döndür
                 return -1;
-            }
+            }           
 
             // Eğer item'lar varsa, en yüksek Order değerini bul ve döndür
             return await _context.Items

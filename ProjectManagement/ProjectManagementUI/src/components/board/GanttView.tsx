@@ -7,13 +7,11 @@ import { selectAllGroups } from '../../store/features/groupSlice';
 import { selectAllItemsFlat } from '../../store/features/itemSlice';
 import { selectAllColumns } from '../../store/features/columnSlice';
 import { selectSelectedBoard } from '../../store/features/boardSlice';
-import { updateBoardViewSettings } from '../../store/features/boardViewSlice';
-import GanttToolbar, { type ViewModeOption } from '../gantt/GanttToolbar';
+import GanttToolbar from '../gantt/GanttToolbar';
 import GanttLeftPanel from '../gantt/GanttLeftPanel';
 import GanttRightPanel from '../gantt/GanttRightPanel';
-import { format, addMonths, subMonths, differenceInDays, subYears, addYears, isValid, parseISO, addDays } from 'date-fns';
-import { debounce } from 'lodash';
-import { DEFAULT_ZOOM_INDEX, MAX_ZOOM_INDEX, ZOOM_STEPS, GANTT_ROW_HEIGHT_PX } from '../common/constants';
+import { isValid, parseISO } from 'date-fns';
+import { MAX_ZOOM_INDEX, GANTT_ROW_HEIGHT_PX } from '../common/constants';
 import GanttBaselineModal from '../gantt/GanttBaselineModal';
 import ItemDetailModal from '../item/ItemDetailModal';
 import { useGanttSettings } from '../../hooks/useGanttSettings';
@@ -39,12 +37,6 @@ interface GanttViewProps {
     settingsJson: string | null | undefined;
     zoomIndex: number; // Bu hala dışarıdan geliyor (BoardView'den)
     onZoomIndexChange: (index: number) => void;
-}
-interface GanttSettings {
-    activeTimelineIds?: number[];
-    groupByColumnId?: number | null;
-    colorByColumnId?: number | null;
-    labelById?: number | null;
 }
 
 const GanttView: React.FC<GanttViewProps> = ({
@@ -101,8 +93,7 @@ const GanttView: React.FC<GanttViewProps> = ({
 
     // --- 5. ZAMAN ÇİZELGESİ YÖNETİMİ (Custom Hook) ---
     const {
-        viewMinDate, viewMaxDate, setViewMinDate, setViewMaxDate, // GÜNCELLEME: set'ler artık modal'a geçilmiyor
-        currentDayWidth, currentLevelLabel,
+        viewMinDate, viewMaxDate, currentDayWidth, currentLevelLabel,
         debouncedLoadMore,
         scrollToDate,
         handleViewModeChange,
@@ -256,6 +247,7 @@ const GanttView: React.FC<GanttViewProps> = ({
                         viewMaxDate={viewMaxDate}
                         collapsedGroupIds={collapsedGroupIds}
                         dayWidthPx={currentDayWidth}
+                        scrollContainerRef={rightPanelScrollRef}
                         onItemClick={handleItemClick}
                         onMouseEnterBar={setHoveredItemId}
                         onMouseLeaveBar={() => setHoveredItemId(null)}

@@ -41,10 +41,8 @@ interface GanttDragResizeProps {
 }
 
 export const useGanttDragResize = ({
-    paneRef,
     items,
     columns,
-    viewMinDate,
     dayWidthPx,
     onItemClick,
     onDragStart,
@@ -54,7 +52,6 @@ export const useGanttDragResize = ({
     const dispatch = useAppDispatch();
     const [dragState, setDragState] = useState<DragResizeState | null>(null);
 
-    const activeItemId = dragState?.item.id ?? null;
     const isDragging = dragState !== null && dragState.side === null;
     const isResizing = dragState !== null && dragState.side !== null;
 

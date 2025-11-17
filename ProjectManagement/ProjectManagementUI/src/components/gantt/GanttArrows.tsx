@@ -27,6 +27,7 @@ const ARROW_DETOUR_STEP = 6;
 export interface ProcessedItemData {
     item: { id: number, name: string, groupId: number };
     rowIndex: number;
+     rowSpan: number;
     barData: BarTimelineData | null; // Birincil bar (Oklar bunu kullanır)
     visualOnlyBars: BarTimelineData[]; // Kopya barlar
     dependencies: DependencyLink[];
