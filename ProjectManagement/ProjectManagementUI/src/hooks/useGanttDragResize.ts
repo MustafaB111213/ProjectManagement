@@ -8,7 +8,7 @@ import { type ProcessedItemData } from '../components/gantt/GanttArrows';
 import { useAppDispatch } from '../store/hooks';
 import { updateItemValue } from '../store/features/itemSlice';
 import { checkDependencyViolations, type UpdatedTaskData, type Violation } from '../utils/ganttDependencies';
-import { parseISO, differenceInDays, addDays, format, max as maxDate, min as minDate, differenceInCalendarDays } from 'date-fns';
+import { parseISO, differenceInCalendarDays, addDays, format, max as maxDate, min as minDate } from 'date-fns';
 
 type ResizeSide = 'start' | 'end';
 

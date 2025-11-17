@@ -54,16 +54,20 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
         const formattedEnd = format(bar.endDate, 'yyyy-MM-dd');
         const badgeOffset = 14;
 
+        const visibilityClasses = isActive
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100';
+
         return (
             <>
                 <div
-                    className="absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] leading-none opacity-0 pointer-events-none group-hover:opacity-100"
+                    className={`absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] leading-none pointer-events-none ${visibilityClasses}`}
                     style={{ top: `${top - badgeOffset}px`, left: `${bar.startX}px` }}
                 >
                     {formattedStart}
                 </div>
                 <div
-                    className="absolute translate-x-1/2 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] leading-none opacity-0 pointer-events-none group-hover:opacity-100"
+                    className={`absolute translate-x-1/2 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] leading-none pointer-events-none ${visibilityClasses}`}
                     style={{ top: `${top - badgeOffset}px`, left: `${bar.endX}px` }}
                 >
                     {formattedEnd}
@@ -71,6 +75,7 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
             </>
         );
     };
+
 
     // 'if (!itemData.barData)' kontrolünü kaldırıyoruz.
     // 'GanttRightPanel'deki boş satır (div) artık GEREKSİZ,
@@ -119,7 +124,6 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                     {renderDateBadges(barData, baseTop + GANTT_BAR_TOP_OFFSET_PX)}
 
                 </div>
-
             )}
 
             {/* 1.1 ORİJİNAL POZİSYON SİLÜETİ */}

@@ -4,7 +4,7 @@ import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { type Group, type Item, type Column, ColumnType, type DependencyLink, type User } from '../../types';
 import TimelineHeader from './TimelineHeader';
 // date-fns'ten gerekli fonksiyonları import et
-import { parseISO, differenceInDays, format, differenceInCalendarDays, addDays } from 'date-fns';
+import { parseISO, format, differenceInCalendarDays, addDays } from 'date-fns';
 // Redux hook ve action'ı import et
 import { useAppSelector } from '../../store/hooks';
 
