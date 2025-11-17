@@ -4,7 +4,7 @@ import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { type Group, type Item, type Column, ColumnType, type DependencyLink, type User } from '../../types';
 import TimelineHeader from './TimelineHeader';
 // date-fns'ten gerekli fonksiyonları import et
-import { parseISO, differenceInDays, format } from 'date-fns';
+import { parseISO, differenceInDays, format, differenceInCalendarDays, addDays } from 'date-fns';
 // Redux hook ve action'ı import et
 import { useAppSelector } from '../../store/hooks';
 
@@ -193,7 +193,7 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
 
         // --- RENK SEÇİMİ (Orijinal kodundaki gibi) ---
         let colorClass = STATUS_COLORS.Default;
-        if (colorByColumnId) {
+        if (colorByColumnId !== null) {
           const colorValue = item.itemValues.find(v => v.columnId === colorByColumnId)?.value;
           if (colorValue && STATUS_COLORS[colorValue]) {
             colorClass = STATUS_COLORS[colorValue];
@@ -221,8 +221,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                   return;
                 }
                 validBarCount++;
-                const leftDays = differenceInDays(startDate, viewMinDate);
-                const durationDays = Math.max(1, differenceInDays(endDate, startDate) + 1);
+                const leftDays = differenceInCalendarDays(startDate, viewMinDate);
+                const durationDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
                 if (isNaN(leftDays)) return; // Geçersizse atla
                 const startX = leftDays * dayWidthPx;
                 const width = durationDays * dayWidthPx;
@@ -240,6 +240,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                   colorClass: colorClass,
                   startX: startX,
                   endX: startX + width,
+                  startDate,
+                  endDate,
                   timelineColumnId: timelineId,
                   timelineColumnTitle: columnTitle
 
@@ -377,10 +379,83 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
   }, [groups, items, collapsedGroupIds, activeTimelineIds]);
   // totalHeight artık doğru hesaplanacak
   const totalHeight = (maxRowIndex + 1) * GANTT_ROW_HEIGHT_PX;
-  const totalDays = differenceInDays(viewMaxDate, viewMinDate) + 1;
+  const totalDays = differenceInCalendarDays(viewMaxDate, viewMinDate) + 1;
   const totalWidth = Math.max(100, totalDays * dayWidthPx);
 
+  const applyPreviewToBar = useCallback((bar: BarTimelineData, itemId: number): BarTimelineData => {
+    let deltaDays = 0;
+    let resizeSide: 'start' | 'end' | null = null;
 
+    if (draggedItemData && draggedItemData.item.id === itemId && draggedItemData.timelineColumnId === bar.timelineColumnId) {
+      deltaDays = draggedItemData.currentDeltaDays;
+      resizeSide = draggedItemData.side;
+    }
+    if (resizedItemData && resizedItemData.item.id === itemId && resizedItemData.timelineColumnId === bar.timelineColumnId) {
+      deltaDays = resizedItemData.currentDeltaDays;
+      resizeSide = resizedItemData.side;
+    }
+
+    if (!deltaDays && resizeSide === null) return bar;
+
+    const deltaPx = deltaDays * dayWidthPx;
+    let startX = bar.startX;
+    let endX = bar.endX;
+
+    if (resizeSide === null) {
+      startX += deltaPx;
+      endX += deltaPx;
+    } else if (resizeSide === 'start') {
+      startX = Math.min(endX - dayWidthPx, startX + deltaPx);
+    } else if (resizeSide === 'end') {
+      endX = Math.max(startX + dayWidthPx, endX + deltaPx);
+    }
+
+    const startDaysDelta = Math.round((startX - bar.startX) / dayWidthPx);
+    const normalizedStartX = bar.startX + startDaysDelta * dayWidthPx;
+    const pixelWidth = Math.max(dayWidthPx, endX - normalizedStartX);
+    const durationDays = Math.max(1, Math.round(pixelWidth / dayWidthPx));
+    const normalizedWidth = durationDays * dayWidthPx;
+    const normalizedEndX = normalizedStartX + normalizedWidth;
+    const startDate = addDays(bar.startDate, startDaysDelta);
+    const endDate = addDays(startDate, durationDays - 1);
+
+    return {
+      ...bar,
+      startX: normalizedStartX,
+      endX: normalizedEndX,
+      startDate,
+      endDate,
+      style: {
+        ...bar.style,
+        left: `${normalizedStartX}px`,
+        width: `${normalizedWidth}px`,
+      },
+    };
+  }, [dayWidthPx, draggedItemData, resizedItemData]);
+
+  const buildPreviewItemData = useCallback((itemData: ProcessedItemData): ProcessedItemData => {
+    const updatedBar = itemData.barData ? applyPreviewToBar(itemData.barData, itemData.item.id) : null;
+    const updatedVisualBars = itemData.visualOnlyBars.map(bar => applyPreviewToBar(bar, itemData.item.id));
+
+    if (updatedBar === itemData.barData && updatedVisualBars.every((bar, idx) => bar === itemData.visualOnlyBars[idx])) {
+      return itemData;
+    }
+
+    return {
+      ...itemData,
+      barData: updatedBar,
+      visualOnlyBars: updatedVisualBars,
+    };
+  }, [applyPreviewToBar]);
+
+  const previewProcessedData = useMemo(() => {
+    const map = new Map<number, ProcessedItemData>();
+    processedData.forEach((itemData, id) => {
+      map.set(id, buildPreviewItemData(itemData));
+    });
+    return map;
+  }, [buildPreviewItemData, processedData]);
+  
   return (
     <div ref={paneRef} className="w-full relative bg-primary-background "
       style={{ minWidth: `${totalWidth}px` }}
@@ -424,11 +499,15 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
               {Array.from(processedData.values())
                 .filter(itemData => itemData.item.groupId === group.id)
                 .sort((a, b) => a.rowIndex - b.rowIndex)
-                .map(itemData => (
-                  <React.Fragment key={itemData.item.id}>
-                    {/* 1. Görev Çubuğu (Bar) */}
-                    <GanttBarRow
-                      itemData={itemData}
+                .map(itemData => {
+                  const previewItemData = previewProcessedData.get(itemData.item.id) || itemData;
+
+                  return (
+                    <React.Fragment key={itemData.item.id}>
+                      {/* 1. Görev Çubuğu (Bar) */}
+                      <GanttBarRow
+                      itemData={previewItemData}
+                      originalItemData={itemData}
                       isActive={
                         // 'isActive' kontrolü GÜNCELLENDİ (Yeni hook'un state'ine göre)
                         (isDragging && draggedItemData?.item.id === itemData.item.id) ||
@@ -446,31 +525,32 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                     />
 
                     {/* 2. Dış Etiket (Bar'ın Yanında) */}
-                    {itemData.barData && itemData.externalLabel && (
+                    {previewItemData.barData && previewItemData.externalLabel && (
                       <div
                         className="absolute flex items-center px-3 text-xs text-gray-700 :text-gray-300 pointer-events-none truncate"
                         style={{
                           // Etiketi her zaman BİRİNCİL barın yanına koyar
-                          top: `${(itemData.rowIndex * GANTT_ROW_HEIGHT_PX) + GANTT_BAR_TOP_OFFSET_PX}px`,
-                          left: `${itemData.barData.endX + 6}px`,
+                          top: `${(previewItemData.rowIndex * GANTT_ROW_HEIGHT_PX) + GANTT_BAR_TOP_OFFSET_PX}px`,
+                          left: `${previewItemData.barData.endX + 6}px`,
                           height: `${GANTT_BAR_HEIGHT_PX}px`,
                           lineHeight: `${GANTT_BAR_HEIGHT_PX}px`,
                           zIndex: 10,
                           whiteSpace: 'nowrap'
                         }}
                       >
-                        {itemData.externalLabel}
+                        {previewItemData.externalLabel}
                       </div>
                     )}
                   </React.Fragment>
-                ))}
+                );
+                })}
             </React.Fragment>
           );
         })}
 
         {/* OKLAR (Değişiklik Yok) */}
         <GanttArrows
-          processedData={processedData}
+          processedData={previewProcessedData}
           totalWidth={totalWidth}
           totalHeight={totalHeight}
           hoveredItemId={hoveredItemId}

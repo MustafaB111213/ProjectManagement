@@ -11,6 +11,8 @@ export interface BarTimelineData {
     colorClass: string;
     startX: number;
     endX: number;
+    startDate: Date;
+    endDate: Date;
     timelineColumnId: number;
     timelineColumnTitle: string;
 }

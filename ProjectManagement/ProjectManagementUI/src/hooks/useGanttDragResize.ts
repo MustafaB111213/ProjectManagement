@@ -8,7 +8,7 @@ import { type ProcessedItemData } from '../components/gantt/GanttArrows';
 import { useAppDispatch } from '../store/hooks';
 import { updateItemValue } from '../store/features/itemSlice';
 import { checkDependencyViolations, type UpdatedTaskData, type Violation } from '../utils/ganttDependencies';
-import { parseISO, differenceInDays, addDays, format, max as maxDate, min as minDate } from 'date-fns';
+import { parseISO, differenceInDays, addDays, format, max as maxDate, min as minDate, differenceInCalendarDays } from 'date-fns';
 
 type ResizeSide = 'start' | 'end';
 
@@ -24,6 +24,7 @@ interface DragResizeState {
     originalStartDate: Date;
     originalEndDate: Date;
     originalMouseX: number;
+    currentDeltaDays: number;
     side: ResizeSide | null;
     isClickEvent: boolean;
 }
@@ -102,6 +103,7 @@ export const useGanttDragResize = ({
             originalStartDate: dates.startDate,
             originalEndDate: dates.endDate,
             originalMouseX: event.clientX,
+            currentDeltaDays: 0,
             side: null,
             isClickEvent: true,
         });
@@ -135,6 +137,7 @@ export const useGanttDragResize = ({
             originalStartDate: dates.startDate,
             originalEndDate: dates.endDate,
             originalMouseX: event.clientX,
+            currentDeltaDays: 0,
             side: side,
             isClickEvent: false,
         });
@@ -144,15 +147,32 @@ export const useGanttDragResize = ({
     // --- MOUSE MOVE/UP/LEAVE HANDLER'LARI ---
 
     const handlePaneMouseMove = useCallback((event: MouseEvent) => {
-        // ... (Bu fonksiyon aynı) ...
         if (!dragState) return;
-        if (dragState.isClickEvent) {
-            const deltaX = event.clientX - dragState.originalMouseX;
-            if (Math.abs(deltaX) > dragThreshold) {
-                setDragState(prev => prev ? { ...prev, isClickEvent: false } : null);
-            }
-        }
-    }, [dragState, dragThreshold]);
+        
+        const deltaX = event.clientX - dragState.originalMouseX;
+        const deltaDays = Math.round(deltaX / dayWidthPx);
+
+        setDragState(prev => {
+            if (!prev) return null;
+
+            const isClickEvent = prev.isClickEvent && Math.abs(deltaX) <= dragThreshold
+                ? prev.isClickEvent
+                : false;
+
+            const shouldUpdate =
+                isClickEvent !== prev.isClickEvent ||
+                deltaDays !== prev.currentDeltaDays;
+
+            if (!shouldUpdate) return prev;
+
+            return {
+                ...prev,
+                isClickEvent,
+                currentDeltaDays: deltaDays,
+            };
+        });
+    }, [dragState, dayWidthPx, dragThreshold]);
+
 
     // DÜZELTME: Fonksiyon adı 'handlePaneMouseUp' olarak değiştirildi
     const handlePaneMouseUp = useCallback((event: MouseEvent) => {
@@ -166,14 +186,13 @@ export const useGanttDragResize = ({
             onItemClick(dragState.item.id);
         }
         else {
-            const deltaX = event.clientX - dragState.originalMouseX;
-            const deltaDays = Math.round(deltaX / dayWidthPx);
+            const deltaDays = dragState.currentDeltaDays;
 
             if (deltaDays === 0) {
                 needsUpdate = false;
             }
             else if (dragState.side === null) { // Sürükleme
-                const duration = differenceInDays(dragState.originalEndDate, dragState.originalStartDate);
+                const duration = differenceInCalendarDays(dragState.originalEndDate, dragState.originalStartDate);
                 newStartDate = addDays(dragState.originalStartDate, deltaDays);
                 newEndDate = addDays(newStartDate, Math.max(0, duration));
                 needsUpdate = true;

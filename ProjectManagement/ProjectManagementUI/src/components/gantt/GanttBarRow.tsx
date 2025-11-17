@@ -1,6 +1,7 @@
 // src/components/gantt/GanttBarRow.tsx (PERFORMANS GÜNCELLENDİ)
 
 import React from 'react';
+import { format } from 'date-fns';
 import { type ProcessedItemData, type BarTimelineData } from './GanttArrows';
 import {
     GANTT_ROW_HEIGHT_PX,
@@ -16,6 +17,7 @@ type ResizeSide = 'start' | 'end';
 
 interface GanttBarRowProps {
     itemData: ProcessedItemData;
+    originalItemData: ProcessedItemData;
     isActive: boolean;
     // YENİ: Handlera 'timelineColumnId' ekle
     onBarMouseDown: (event: React.MouseEvent, itemData: ProcessedItemData, timelineColumnId: number) => void;
@@ -31,6 +33,7 @@ interface GanttBarRowProps {
 // GÜNCELLENDİ: Bileşeni '_' (alt çizgi) ile yeniden adlandırın
 const _GanttBarRow: React.FC<GanttBarRowProps> = ({
     itemData,
+    originalItemData,
     isActive,
     onBarMouseDown,
     onResizeHandleMouseDown,
@@ -39,9 +42,35 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
 }) => {
     // Değişkenleri al
     const { barData, visualOnlyBars } = itemData;
+    const { barData: originalBarData, visualOnlyBars: originalVisualBars } = originalItemData;
 
     // Birincil barın (veya tüm satırın) 'top' konumu
     const baseTop = itemData.rowIndex * GANTT_ROW_HEIGHT_PX;
+
+    const renderDateBadges = (bar: BarTimelineData, top: number) => {
+        if (!bar.startDate || !bar.endDate) return null;
+
+        const formattedStart = format(bar.startDate, 'yyyy-MM-dd');
+        const formattedEnd = format(bar.endDate, 'yyyy-MM-dd');
+        const badgeOffset = 14;
+
+        return (
+            <>
+                <div
+                    className="absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] leading-none opacity-0 pointer-events-none group-hover:opacity-100"
+                    style={{ top: `${top - badgeOffset}px`, left: `${bar.startX}px` }}
+                >
+                    {formattedStart}
+                </div>
+                <div
+                    className="absolute translate-x-1/2 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] leading-none opacity-0 pointer-events-none group-hover:opacity-100"
+                    style={{ top: `${top - badgeOffset}px`, left: `${bar.endX}px` }}
+                >
+                    {formattedEnd}
+                </div>
+            </>
+        );
+    };
 
     // 'if (!itemData.barData)' kontrolünü kaldırıyoruz.
     // 'GanttRightPanel'deki boş satır (div) artık GEREKSİZ,
@@ -87,8 +116,38 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                         className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-10 rounded-r"
                         style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
                     ></div>
+                    {renderDateBadges(barData, baseTop + GANTT_BAR_TOP_OFFSET_PX)}
 
                 </div>
+
+            )}
+
+            {/* 1.1 ORİJİNAL POZİSYON SİLÜETİ */}
+            {isActive && originalBarData && barData && (originalBarData.startX !== barData.startX || originalBarData.endX !== barData.endX) && (
+                <div
+                    className="rounded border-2 border-dashed border-blue-500 bg-white bg-opacity-30 absolute pointer-events-none"
+                    style={{
+                        ...originalBarData.style,
+                        position: 'absolute',
+                        top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX}px`,
+                        zIndex: 9,
+                        opacity: 0.6,
+                    }}
+                />
+            )}
+
+            {/* 1.1 ORİJİNAL POZİSYON SİLÜETİ */}
+            {isActive && originalBarData && barData && (originalBarData.startX !== barData.startX || originalBarData.endX !== barData.endX) && (
+                <div
+                    className="rounded border-2 border-dashed border-blue-500 bg-white bg-opacity-30 absolute pointer-events-none"
+                    style={{
+                        ...originalBarData.style,
+                        position: 'absolute',
+                        top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX}px`,
+                        zIndex: 9,
+                        opacity: 0.6,
+                    }}
+                />
             )}
 
             {/* 2. GÖRSEL KOPYA BARLAR (Kopya "Proje" satırları) */}
@@ -137,9 +196,34 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                             className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-10 rounded-r"
                             style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
                         ></div>
+                        {renderDateBadges(bar, visualBarTop)}
                     </div>
                 );
             })}
+
+            {/* 2.1 GÖRSEL KOPYALAR İÇİN ORİJİNAL SİLÜETLER */}
+            {isActive && originalVisualBars.map((bar, index) => {
+                const copyRowIndex = index + 1;
+                const visualBarTop = (itemData.rowIndex + copyRowIndex) * GANTT_ROW_HEIGHT_PX + GANTT_BAR_TOP_OFFSET_PX;
+                const previewBar = visualOnlyBars[index];
+                if (!previewBar) return null;
+                if (bar.startX === previewBar.startX && bar.endX === previewBar.endX) return null;
+
+                return (
+                    <div
+                        key={`${itemData.item.id}-visual-silhouette-${index}`}
+                        className="rounded border-2 border-dashed border-blue-500 bg-white bg-opacity-30 absolute pointer-events-none"
+                        style={{
+                            ...bar.style,
+                            position: 'absolute',
+                            top: `${visualBarTop}px`,
+                            zIndex: 9,
+                            opacity: 0.6,
+                        }}
+                    />
+                );
+            })}
+
 
             {/* 3. ETİKET (LABEL) (Sadece birincil barda) */}
             {/* 'GanttRightPanel' render bloğundan buraya taşıdım */}

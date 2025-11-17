@@ -191,7 +191,6 @@ const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
                                     <span>Pano Grupları</span>
                                     {groupByColumnId === null && <FiCheck className="w-5 h-5 text-indigo-600" />}
                                 </button>
-                                {/* --- GÜNCELLEME SONU --- */}
 
                                 {categoricalColumns.map((col, index) => (
                                     <button

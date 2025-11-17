@@ -7,11 +7,11 @@ import {
     eachMonthOfInterval,
     eachYearOfInterval, 
     format,
-    differenceInDays,
+    differenceInCalendarDays,
     endOfWeek,
-    endOfMonth, 
-    endOfYear,  
-    isSameDay,  
+    endOfMonth,
+    endOfYear,
+    isSameDay,
     min,
     max
 } from 'date-fns';
@@ -91,7 +91,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
             // Görünüm aralığıyla kesişen günleri bul
             const start = max([viewMinDate, intervalStart]);
             const end = min([viewMaxDate, intervalEnd]);
-            const daysInView = end >= start ? differenceInDays(end, start) + 1 : 0;
+            const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
             const name = format(intervalStart, formatStr, { locale: tr });
             
             return {
@@ -132,7 +132,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
                 const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
                 const start = max([viewMinDate, weekStart]);
                 const end = min([viewMaxDate, weekEnd]);
-                const daysInView = end >= start ? differenceInDays(end, start) + 1 : 0;
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
                 // 'ww', ISO hafta numarasını verir (01-53)
                 const weekNumStr = format(weekStart, 'ww', { locale: tr, weekStartsOn: 1 });
                 
@@ -152,7 +152,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
                 const monthEnd = endOfMonth(monthStart);
                 const start = max([viewMinDate, monthStart]);
                 const end = min([viewMaxDate, monthEnd]);
-                const daysInView = end >= start ? differenceInDays(end, start) + 1 : 0;
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
                 const monthStr = format(monthStart, 'MMM', { locale: tr }); // "Oca", "Şub"
 
                 return {
