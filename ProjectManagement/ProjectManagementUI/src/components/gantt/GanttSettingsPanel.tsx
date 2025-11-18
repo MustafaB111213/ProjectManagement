@@ -133,6 +133,58 @@ const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
                         </div>
                     </CollapsibleStep>
 
+                    {/* 3. Gruplama */}
+                    <CollapsibleStep title="Grupla">
+                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
+                            <button onClick={() => onGroupByColumnChange(null)} className={getOptionClassName(groupByColumnId === null)}>
+                                <span>Gruplama Yok</span>
+                                {groupByColumnId === null && <FiCheck className="w-4 h-4" />}
+                            </button>
+                            {categoricalColumns.map(col => (
+                                <button key={col.id} onClick={() => onGroupByColumnChange(col.id)} className={`${getOptionClassName(groupByColumnId === col.id)} border-t border-gray-100`}>
+                                    <span>{col.title}</span>
+                                    {groupByColumnId === col.id && <FiCheck className="w-4 h-4" />}
+                                </button>
+                            ))}
+                        </div>
+                    </CollapsibleStep>
+
+                    {/* 4. Renklendirme */}
+                    <CollapsibleStep title="Renklendir">
+                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
+                            <button onClick={() => onColorByColumnChange(null)} className={getOptionClassName(colorByColumnId === null)}>
+                                <span>Varsayılan</span>
+                                {colorByColumnId === null && <FiCheck className="w-4 h-4" />}
+                            </button>
+                            {categoricalColumns.map(col => (
+                                <button key={col.id} onClick={() => onColorByColumnChange(col.id)} className={`${getOptionClassName(colorByColumnId === col.id)} border-t border-gray-100`}>
+                                    <span>{col.title}</span>
+                                    {colorByColumnId === col.id && <FiCheck className="w-4 h-4" />}
+                                </button>
+                            ))}
+                        </div>
+                    </CollapsibleStep>
+
+                    {/* 5. Etiketleme */}
+                    <CollapsibleStep title="Etiketle">
+                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
+                            <button onClick={() => onLabelByChange(null)} className={getOptionClassName(labelById === null)}>
+                                <span>Hiçbiri</span>
+                                {labelById === null && <FiCheck className="w-4 h-4" />}
+                            </button>
+                            <button onClick={() => onLabelByChange(-2)} className={`${getOptionClassName(labelById === -2)} border-t border-gray-100`}>
+                                <span>Proje Adı</span>
+                                {labelById === -2 && <FiCheck className="w-4 h-4" />}
+                            </button>
+                            {labelableColumns.map(col => (
+                                <button key={col.id} onClick={() => onLabelByChange(col.id)} className={`${getOptionClassName(labelById === col.id)} border-t border-gray-100`}>
+                                    <span>{col.title}</span>
+                                    {labelById === col.id && <FiCheck className="w-4 h-4" />}
+                                </button>
+                            ))}
+                        </div>
+                    </CollapsibleStep>
+                    
                     {/* 2. Temel Çizgiler (BASELINE) */}
                     <CollapsibleStep title="Temel Çizgiler (Baseline)" isInitiallyOpen={true}>
                         <div className="space-y-3 pt-1">
@@ -191,58 +243,6 @@ const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
                                     )}
                                 </div>
                             </div>
-                        </div>
-                    </CollapsibleStep>
-
-                    {/* 3. Gruplama */}
-                    <CollapsibleStep title="Grupla">
-                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
-                            <button onClick={() => onGroupByColumnChange(null)} className={getOptionClassName(groupByColumnId === null)}>
-                                <span>Gruplama Yok</span>
-                                {groupByColumnId === null && <FiCheck className="w-4 h-4" />}
-                            </button>
-                            {categoricalColumns.map(col => (
-                                <button key={col.id} onClick={() => onGroupByColumnChange(col.id)} className={`${getOptionClassName(groupByColumnId === col.id)} border-t border-gray-100`}>
-                                    <span>{col.title}</span>
-                                    {groupByColumnId === col.id && <FiCheck className="w-4 h-4" />}
-                                </button>
-                            ))}
-                        </div>
-                    </CollapsibleStep>
-
-                    {/* 4. Renklendirme */}
-                    <CollapsibleStep title="Renklendir">
-                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
-                            <button onClick={() => onColorByColumnChange(null)} className={getOptionClassName(colorByColumnId === null)}>
-                                <span>Varsayılan</span>
-                                {colorByColumnId === null && <FiCheck className="w-4 h-4" />}
-                            </button>
-                            {categoricalColumns.map(col => (
-                                <button key={col.id} onClick={() => onColorByColumnChange(col.id)} className={`${getOptionClassName(colorByColumnId === col.id)} border-t border-gray-100`}>
-                                    <span>{col.title}</span>
-                                    {colorByColumnId === col.id && <FiCheck className="w-4 h-4" />}
-                                </button>
-                            ))}
-                        </div>
-                    </CollapsibleStep>
-
-                    {/* 5. Etiketleme */}
-                    <CollapsibleStep title="Etiketle">
-                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
-                            <button onClick={() => onLabelByChange(null)} className={getOptionClassName(labelById === null)}>
-                                <span>Hiçbiri</span>
-                                {labelById === null && <FiCheck className="w-4 h-4" />}
-                            </button>
-                            <button onClick={() => onLabelByChange(-2)} className={`${getOptionClassName(labelById === -2)} border-t border-gray-100`}>
-                                <span>Proje Adı</span>
-                                {labelById === -2 && <FiCheck className="w-4 h-4" />}
-                            </button>
-                            {labelableColumns.map(col => (
-                                <button key={col.id} onClick={() => onLabelByChange(col.id)} className={`${getOptionClassName(labelById === col.id)} border-t border-gray-100`}>
-                                    <span>{col.title}</span>
-                                    {labelById === col.id && <FiCheck className="w-4 h-4" />}
-                                </button>
-                            ))}
                         </div>
                     </CollapsibleStep>
 
