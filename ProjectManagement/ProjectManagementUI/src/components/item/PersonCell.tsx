@@ -1,9 +1,9 @@
 import React, { useState, useRef, useMemo } from 'react';
-import type { Item, Column, User } from '../../types'; // User tipini import et
+import type { Item, Column } from '../../types'; // User tipini import et
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { updateItemValue } from '../../store/features/itemSlice';
 import Popover from '../common/Popover';
-import { FiPlus, FiUsers } from 'react-icons/fi'; // FiUsers ikonu eklendi
+import { FiUsers } from 'react-icons/fi'; // FiUsers ikonu eklendi
 import { selectAllUsers } from '../../store/features/userSlice';
 
 
@@ -175,7 +175,7 @@ const PersonCell: React.FC<PersonCellProps> = ({ item, column, align = 'center' 
                         )}
                     </div>
                 ) : (
-                    // Eğer kimse atanmamışsa, "+" ikonu göster (stil güncellendi)
+                    // Eğer kimse atanmamışsa, "+" ikonu göster
                     <div className="w-7 h-7 rounded-full border-2 border-dashed border-gray-300 text-gray-400 group-hover:bg-blue-100 group-hover:border-blue-300 group-hover:text-blue-500 flex items-center justify-center transition-colors">
                         <FiUsers className="w-4 h-4" /> {/* FiPlus yerine FiUsers */}
                     </div>

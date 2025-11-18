@@ -1,4 +1,4 @@
-// src/components/board/GanttView.tsx (GÜNCELLENMİŞ)
+// src/components/board/GanttView.tsx
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
@@ -19,7 +19,6 @@ import { useGanttTimeline } from '../../hooks/useGanttTimeline';
 import { usePanelSync } from '../../hooks/usePanelSync';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
-// --- LOKAL SABİTLER ---
 const STATUS_OPTIONS_CONFIG = [
     { id: 0, text: 'Yapılıyor', color: '#C2410C' },
     { id: 1, text: 'Tamamlandı', color: '#047857' },
@@ -30,12 +29,11 @@ const STATUS_OPTIONS_CONFIG = [
 const STATUS_CONFIG_MAP = new Map(STATUS_OPTIONS_CONFIG.map(opt => [opt.text, opt]));
 const DEFAULT_STATUS_CONFIG = STATUS_CONFIG_MAP.get('Belirsiz')!;
 
-// --- PROPS ARAYÜZLERİ ---
 interface GanttViewProps {
     boardId: number;
     viewId: number;
     settingsJson: string | null | undefined;
-    zoomIndex: number; // Bu hala dışarıdan geliyor (BoardView'den)
+    zoomIndex: number;
     onZoomIndexChange: (index: number) => void;
 }
 
@@ -46,7 +44,6 @@ const GanttView: React.FC<GanttViewProps> = ({
     zoomIndex,
     onZoomIndexChange
 }) => {
-    // --- 1. VERİ SEÇİMİ (Redux) ---
     const dispatch = useAppDispatch();
     const allGroups = useAppSelector(selectAllGroups);
     const allItems = useAppSelector(selectAllItemsFlat);
@@ -54,21 +51,23 @@ const GanttView: React.FC<GanttViewProps> = ({
     const columnStatus = useAppSelector(state => state.columns.status);
     const selectedBoard = useAppSelector(selectSelectedBoard);
 
-    // --- 2. AYAR YÖNETİMİ (Custom Hook) ---
+    // --- 2. AYAR YÖNETİMİ ---
+    // 'allItems' parametresi eklendi (Baseline verilerini kopyalamak için gerekli)
     const { settingsState, settingsHandlers } = useGanttSettings(
-        settingsJson, boardId, viewId, allColumns, columnStatus
+        settingsJson, boardId, viewId, allColumns, columnStatus, allItems
     );
+    
     const {
-        activeTimelineIds, groupByColumnId, colorByColumnId, labelById,
+        activeTimelineIds, groupByColumnId, colorByColumnId, labelById, activeBaselineId,
         setActiveTimelineIds, setGroupByColumnId, setColorByColumnId, setLabelById
     } = settingsState;
 
-    // --- 3. REF'LER ---
+    const { handleTimelineColumnChange, handleGroupByColumnChange, handleColorByColumnChange, handleLabelByChange, handleBaselineChange, handleCreateBaseline, handleDeleteBaseline } = settingsHandlers;
+
     const rightPanelScrollRef = useRef<HTMLDivElement>(null);
     const leftPanelInnerRef = useRef<HTMLDivElement>(null);
     const totalHeightRef = useRef(0);
 
-    // --- 4. VERİ İŞLEME (useMemo) ---
     const projectDateRange = useMemo(() => {
         const primaryTimelineId = activeTimelineIds.length > 0 ? activeTimelineIds[0] : null;
         if (!primaryTimelineId || allItems.length === 0) return { minDate: null, maxDate: null };
@@ -91,7 +90,6 @@ const GanttView: React.FC<GanttViewProps> = ({
         return { minDate, maxDate };
     }, [allItems, activeTimelineIds]);
 
-    // --- 5. ZAMAN ÇİZELGESİ YÖNETİMİ (Custom Hook) ---
     const {
         viewMinDate, viewMaxDate, currentDayWidth, currentLevelLabel,
         debouncedLoadMore,
@@ -107,20 +105,17 @@ const GanttView: React.FC<GanttViewProps> = ({
         rightPanelScrollRef
     });
 
-    // --- 6. PANEL SENKRONİZASYONU (Custom Hook) ---
     const {
         handleScroll,
         handleLeftPanelWheel
     } = usePanelSync(debouncedLoadMore, leftPanelInnerRef, rightPanelScrollRef);
 
-    // --- 7. LOKAL UI STATE'LERİ ---
     const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(new Set());
     const [isWidgetModalOpen, setIsWidgetModalOpen] = useState(false);
     const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
     const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
-    // --- 8. VERİ DÖNÜŞTÜRME (useMemo) ---
     const displayData = useMemo(() => {
         if (!groupByColumnId) {
             return { groups: allGroups, items: allItems };
@@ -158,7 +153,6 @@ const GanttView: React.FC<GanttViewProps> = ({
         totalHeightRef.current = (maxRowIndex + 1) * GANTT_ROW_HEIGHT_PX;
     }, [maxRowIndex]);
 
-    // --- 9. LOKAL HANDLER'LAR ---
     const handleToggleGroup = useCallback((groupId: number) => {
         setCollapsedGroupIds(prev => {
             const newSet = new Set(prev);
@@ -175,7 +169,6 @@ const GanttView: React.FC<GanttViewProps> = ({
     const handleToggleLeftPanel = useCallback(() => setIsLeftPanelOpen(prev => !prev), []);
     const handleOpenWidgetModal = () => setIsWidgetModalOpen(true);
 
-    // --- 10. YÜKLENME/HATA DURUMLARI ---
     const isLoading = columnStatus !== 'succeeded' || allGroups.length === 0;
     if (isLoading) {
         return <div className="p-4 text-center">Gantt Şeması Yükleniyor...</div>;
@@ -184,7 +177,6 @@ const GanttView: React.FC<GanttViewProps> = ({
         return <div className="p-4 text-center text-red-600">Hata: Bu panoda 'Timeline' tipinde bir sütun bulunamadı. Lütfen ekleyin.</div>;
     }
 
-    // --- RENDER ---
     return (
         <div className="flex flex-col h-full w-full border border-gray-200 rounded-lg shadow-sm overflow-hidden bg-white relative">
             <GanttToolbar
@@ -215,7 +207,7 @@ const GanttView: React.FC<GanttViewProps> = ({
                             onItemClick={handleItemClick}
                             hoveredItemId={hoveredItemId}
                             columns={allColumns}
-                            activeTimelineIds={settingsState.activeTimelineIds}
+                            activeTimelineIds={activeTimelineIds}
                         />
                     </div>
                 </div>
@@ -251,11 +243,12 @@ const GanttView: React.FC<GanttViewProps> = ({
                         onItemClick={handleItemClick}
                         onMouseEnterBar={setHoveredItemId}
                         onMouseLeaveBar={() => setHoveredItemId(null)}
+                        // YENİ: Prop geçirildi
+                        activeBaselineId={activeBaselineId}
                     />
                 </div>
             </div>
 
-            {/* GÜNCELLEME: Modal'a artık daha az prop geçiliyor */}
             {boardId && (
                 <GanttBaselineModal
                     isOpen={isWidgetModalOpen}
@@ -265,30 +258,34 @@ const GanttView: React.FC<GanttViewProps> = ({
                     groups={displayData.groups}
                     items={displayData.items}
 
-                    // Sadece Ayarlar ve Ayar Handler'ları
+                    // Ayarlar ve Handler'lar
                     activeTimelineIds={activeTimelineIds}
                     onTimelineColumnChange={(ids) => {
                         setActiveTimelineIds(ids);
-                        settingsHandlers.handleTimelineColumnChange(ids);
+                        handleTimelineColumnChange(ids);
                     }}
                     groupByColumnId={groupByColumnId}
                     onGroupByColumnChange={(id) => {
                         setGroupByColumnId(id);
-                        settingsHandlers.handleGroupByColumnChange(id);
+                        handleGroupByColumnChange(id);
                     }}
                     colorByColumnId={colorByColumnId}
                     onColorByColumnChange={(id) => {
                         setColorByColumnId(id);
-                        settingsHandlers.handleColorByColumnChange(id);
+                        handleColorByColumnChange(id);
                     }}
                     labelById={labelById}
                     onLabelByChange={(id) => {
                         setLabelById(id);
-                        settingsHandlers.handleLabelByChange(id);
+                        handleLabelByChange(id);
                     }}
+                    // YENİ: Baseline Ayarları
+                    activeBaselineId={activeBaselineId}
+                    onBaselineChange={handleBaselineChange}
+                    onCreateBaseline={handleCreateBaseline}
 
-                    // Başlangıç zoom seviyesini ana sayfadan al
                     initialZoomIndex={zoomIndex}
+                    onDeleteBaseline={handleDeleteBaseline}
                 />
             )}
 

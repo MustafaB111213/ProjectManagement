@@ -22,7 +22,7 @@ export interface ItemValue {
     columnId: number;
 }
 // YENİ: Backend'den gelen Item nesnesinin tip tanımı
-// GÜNCELLEME: Item tipi artık değerlerini de içeriyor
+// Item tipi artık değerlerini de içeriyor
 export interface Item {
     id: number;
     name: string;

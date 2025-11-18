@@ -4,7 +4,6 @@ import type { Item, Column } from '../../types';
 import { useAppDispatch } from '../../store/hooks';
 import { updateItemValue } from '../../store/features/itemSlice';
 import { FiCalendar } from 'react-icons/fi';
-// GÜNCELLEME: date-fns import'larını zenginleştir
 import { format, parseISO, isValid } from 'date-fns';
 import { tr } from 'date-fns/locale'; // Türkçe formatlama için
 
@@ -17,7 +16,7 @@ const TimelineCell: React.FC<TimelineCellProps> = ({ item, column }) => {
     const dispatch = useAppDispatch();
     const currentValue = item.itemValues.find(v => v.columnId === column.id)?.value || '';
 
-    // GÜNCELLEME 1: 'new Date()' yerine 'parseISO' kullanarak güvenli okuma
+    // 'new Date()' yerine 'parseISO' kullanarak güvenli okuma
     // useMemo kullanarak bu işlemin her render'da tekrarlanmasını engelliyoruz.
     const { startDate, endDate } = useMemo(() => {
         const [startStr, endStr] = currentValue.split('/');
@@ -43,7 +42,7 @@ const TimelineCell: React.FC<TimelineCellProps> = ({ item, column }) => {
     const handleDateChange = (dates: [Date | null, Date | null]) => {
         const [start, end] = dates;
 
-        // GÜNCELLEME 2: '.toISOString()' yerine 'format' kullanarak kaydetme
+        // '.toISOString()' yerine 'format' kullanarak kaydetme
         // Bu, tarihi UTC'ye dönüştürmeden, göründüğü gibi kaydeder.
         const startValue = start ? format(start, 'yyyy-MM-dd') : '';
         const endValue = end ? format(end, 'yyyy-MM-dd') : '';
@@ -57,7 +56,7 @@ const TimelineCell: React.FC<TimelineCellProps> = ({ item, column }) => {
         }));
     };
 
-    // GÜNCELLEME 3: 'toLocaleDateString' yerine 'format' kullanarak formatlama
+    // 'toLocaleDateString' yerine 'format' kullanarak formatlama
     // Bu, 'parseISO' ile tam uyumlu çalışır.
     const formatDate = (date: Date | null) => {
         if (!date) return '';

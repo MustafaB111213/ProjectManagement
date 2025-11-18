@@ -144,13 +144,13 @@ const columnSlice = createSlice({
                 state.status = 'failed';
                 state.error = action.error.message || 'Error';
             })
-            // YENİ CASE: Sütun başarıyla oluşturulduğunda
+            // Sütun başarıyla oluşturulduğunda
             .addCase(createColumn.fulfilled, (state, action: PayloadAction<Column>) => {
                 // Yeni sütunu mevcut sütun listesine ekle.
                 // Bu sayede arayüz anında güncellenir.
                 state.items.push(action.payload);
             })
-            // YENİ CASE: Sütun başarıyla güncellendiğinde
+            // Sütun başarıyla güncellendiğinde
             .addCase(updateColumn.fulfilled, (state, action: PayloadAction<Column>) => {
                 const updatedColumn = action.payload;
                 const index = state.items.findIndex(c => c.id === updatedColumn.id);
@@ -159,11 +159,11 @@ const columnSlice = createSlice({
                     state.items[index].title = updatedColumn.title;
                 }
             })
-            // YENİ CASE: Sütun başarıyla silindiğinde
+            // Sütun başarıyla silindiğinde
             .addCase(deleteColumn.fulfilled, (state, action: PayloadAction<number>) => {
                 state.items = state.items.filter(c => c.id !== action.payload);
             })
-            // --- YENİ CASE'LER: Sütun sırasını güncelleme ---
+            // --- Sütun sırasını güncelleme ---
             .addCase(updateColumnOrder.pending, (state) => {
                 // Optimistic update yaptığımız için 'loading' state'ine geçebiliriz
                 // ama UI'ı kilitlememek için 'succeeded'de kalmak da bir tercih.

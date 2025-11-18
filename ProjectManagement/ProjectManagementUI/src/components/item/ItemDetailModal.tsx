@@ -107,7 +107,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         setItemName(e.target.value);
     };
 
-    // --- HATA DÜZELTMESİ (TS2353) ---
     const handleNameBlur = () => {
         setIsEditingName(false);
         if (itemName.trim() === '') {
@@ -125,7 +124,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             }));
         }
     };
-    // --- DÜZELTME SONU ---
 
     // --- Diğer Alanları Güncelleme ---
     const handleValueChange = (columnId: number, newValue: string) => {
@@ -137,7 +135,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         setEditingField(null); // Popover'ı kapat
     };
 
-    // --- YENİ: Zaman Çizelgesi Güncelleme ---
+    // --- Zaman Çizelgesi Güncelleme ---
     const handleTimelineChange = (newStart: string, newEnd: string, columnId: number) => {
         // Sadece iki tarih de doluysa güncelle
         if (newStart && newEnd) {
@@ -156,7 +154,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         }
     };
 
-    // --- YENİ: Grup Değiştirme ---
+    // --- Grup Değiştirme ---
     const handleGroupChange = (newGroupId: number) => {
         if (newGroupId === item.groupId || !group) {
             setEditingField(null);
@@ -171,8 +169,6 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             destinationGroupId: newGroupId,
             destinationIndex: 0, // Yeni grubun en üstüne taşı
         };
-
-        // 1. İyimser Güncelleme (UI'ın anında tepki vermesi için)
         dispatch(reorderItems(args));
         // 2. API Çağrısı (Sunucuyu güncellemek için)
         dispatch(moveItem(args));
@@ -184,7 +180,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         onClose();
     };
 
-    // --- 'useMemo' Alanları (Aynı) ---
+    // --- 'useMemo' Alanları ---
     const detailFields = useMemo(() => {
         return columns
             .map(col => {

@@ -33,7 +33,6 @@ const Popover = <T extends HTMLElement>({
     paddingClass = 'p-2' // Varsayılan iç padding
 }: PopoverProps<T>) => {
     const popoverRef = useRef<HTMLDivElement>(null); // Popover'ın kendi ref'i
-    // GÜNCELLEME: position: 'fixed' olarak başlar
     const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({
         opacity: 0,
         position: 'fixed', // <-- KRİTİK: Viewport'a göre sınırlama için fixed kullanmalıyız
@@ -160,7 +159,6 @@ const Popover = <T extends HTMLElement>({
     return (
         <div
             ref={popoverRef}
-            // Stil Güncellemeleri: Yumuşak border, shadow, dış className, genişlik
             className={`bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden ${widthClass} ${className}`}
             style={popoverStyle} // Hesaplanan stili uygula
         >

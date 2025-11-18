@@ -1,7 +1,7 @@
 // src/hooks/useGanttTimeline.ts (GÜNCELLENMİŞ)
 
-import { useState, useMemo, useRef, useEffect, useCallback, type RefObject,  } from 'react';
-import { format, addMonths, subMonths, differenceInDays, subYears, addYears, isValid, addDays, parseISO } from 'date-fns';
+import { useState, useRef, useEffect, useCallback, type RefObject,  } from 'react';
+import { addMonths, subMonths, differenceInDays, subYears, addYears, isValid } from 'date-fns';
 import { debounce } from 'lodash';
 import type { ViewModeOption } from '../components/gantt/GanttToolbar';
 import { DEFAULT_ZOOM_INDEX, MAX_ZOOM_INDEX, ZOOM_STEPS } from '../components/common/constants';
@@ -149,7 +149,7 @@ export const useGanttTimeline = ({
         setFocusDate(minDate); // Kaydırmayı tetikle
     }, [projectDateRange, onZoomIndexChange]);
 
-    // GÜNCELLEME: Hook artık tüm state'leri ve handler'ları döndürüyor
+    // Hook artık tüm state'leri ve handler'ları döndürüyor
     return {
         viewMinDate,
         viewMaxDate,

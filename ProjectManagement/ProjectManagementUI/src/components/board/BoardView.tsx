@@ -2,7 +2,7 @@
 
 // React ve DND importları
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { DragDropContext, Droppable, Draggable, type DropResult, type DragUpdate, type DragStart } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, type DropResult, type DragUpdate } from '@hello-pangea/dnd';
 
 // --- Redux hook'ları ve Slice action/selector'ları ---
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
@@ -115,21 +115,6 @@ const BoardView: React.FC = () => {
         dispatch(createBoardView({ boardId: selectedBoardId, payload: newViewPayload }));
 
     }, [dispatch, selectedBoardId]);
-
-    // --- YENİ: Görünüm Yönetimi Handler'ları ---
-    const handleAddView = useCallback(() => {
-        if (!selectedBoardId) return;
-
-        // TODO: Burası idealde bir modal veya dropdown açmalı
-        // Şimdilik önceki gibi otomatik eklemeye devam etsin
-        const isNextTable = boardViews.length % 2 === 0;
-        const newViewPayload = {
-            name: `Yeni ${isNextTable ? 'Tablo' : 'Gantt'}`,
-            type: isNextTable ? 'Table' : 'Gantt',
-        };
-        dispatch(createBoardView({ boardId: selectedBoardId, payload: newViewPayload }));
-
-    }, [dispatch, selectedBoardId, boardViews.length]);
 
     const handleDeleteView = useCallback((viewId: number) => {
         if (!selectedBoardId) return;
@@ -334,7 +319,6 @@ const BoardView: React.FC = () => {
                 viewsStatus === 'succeeded' && (
                     <DragDropContext onDragEnd={onDragEnd} onDragUpdate={onDragUpdate} onDragStart={onDragStart} >
                         {/* İçerik Alanı */}
-                        {/* GÜNCELLEME: İçerik Alanı */}
                         {/* Gantt ise: Kalan alanı kapla (flex-1) ve iç scroll'u GanttView'e bırak (overflow-hidden) */}
                         {/* Tablo ise: Hiçbir stil alma, sayfanın normal kaymasına izin ver. */}
                         <div className={isGanttView ? 'flex-1 overflow-hidden' : 'bg-gray-50 rounded-md shadow-inner'}>
@@ -345,7 +329,7 @@ const BoardView: React.FC = () => {
                             ) : (
                                 // Aktif görünüme göre içeriği render et
                                 <>
-                                    {/* Gantt Görünümü (GÜNCELLENDİ: 'h-full' eklendi) */}
+                                    {/* Gantt Görünümü */}
                                     {activeViewType === 'gantt' && (
                                         <div className="h-full">
                                             <GanttView
@@ -358,13 +342,13 @@ const BoardView: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* Tablo Görünümü (GÜNCELLENDİ: 'overflow-auto' ve 'h-full' KALDIRILDI) */}
+                                    {/* Tablo Görünümü */}
                                     {activeViewType === 'table' && (
                                         <Droppable droppableId={selectedBoardId ? `board-${selectedBoardId}-groups` : 'board-disabled'} type="GROUP" >
                                             {(providedDroppable) => (
                                                 <div
                                                     {...providedDroppable.droppableProps}
-                                                    // GÜNCELLEME: Ref'i artık hem DND hem de auto-scroll için kullan
+                                                    // Ref'i artık hem DND hem de auto-scroll için kullan
                                                     ref={(el) => {
                                                         providedDroppable.innerRef(el);
                                                         (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;

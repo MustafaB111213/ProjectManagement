@@ -1,3 +1,5 @@
+// src/components/gantt/GanttRightPanel.tsx
+
 import React, { useMemo, useState, useCallback, useRef, useEffect, type RefObject } from 'react';
 import { type Group, type Item, type Column, ColumnType, type DependencyLink, type User } from '../../types';
 import TimelineHeader from './TimelineHeader';
@@ -36,6 +38,9 @@ interface GanttRightPanelProps {
   activeTimelineIds: number[];
   colorByColumnId: number | null;
   labelById: number | null;
+  // --- YENİ PROP ---
+  activeBaselineId: number | null;
+  // ----------------
   onItemClick: (itemId: number) => void;
   onMouseEnterBar: (itemId: number) => void;
   onMouseLeaveBar: () => void;
@@ -64,6 +69,9 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
   activeTimelineIds,
   colorByColumnId,
   labelById,
+  // --- YENİ ---
+  activeBaselineId,
+  // -----------
   onItemClick,
   onMouseEnterBar,
   onMouseLeaveBar,
@@ -84,9 +92,9 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
 
   const {
     isDragging,
-    draggedItemData, 
+    draggedItemData,
     isResizing,
-    resizedItemData, 
+    resizedItemData,
     handlePaneMouseLeave,
     handleMouseDownOnBar,
     handleMouseDownOnResizeHandle,
@@ -126,15 +134,15 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
     groups.forEach(group => {
       if (collapsedGroupIds.has(group.id)) return;
 
-      rowIndex++; 
+      rowIndex++;
       const groupItems = items.filter(item => item.groupId === group.id);
       groupItems.sort((a, b) => a.order - b.order);
 
       groupItems.forEach(item => {
         const itemBaseRowIndex = rowIndex + 1;
-        let externalLabel = ""; 
+        let externalLabel = "";
 
-        if (labelById === -2) { 
+        if (labelById === -2) {
           externalLabel = item.name;
         } else if (labelById === -1) {
           const itemGroup = groupMap.get(item.groupId);
@@ -172,19 +180,29 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
           }
         }
 
-        let colorClass = STATUS_COLORS.Default;
+        let colorClass = STATUS_COLORS.Belirsiz;
         if (colorByColumnId !== null) {
           const colorValue = item.itemValues.find(v => v.columnId === colorByColumnId)?.value;
           if (colorValue && STATUS_COLORS[colorValue]) {
             colorClass = STATUS_COLORS[colorValue];
           }
+        } else {
+          // Değer yoksa (boşsa) veya haritada yoksa -> 'Belirsiz' (Gri) kabul et.
+          // Bu sayede "Durum" kolonu seçiliyken durumu olmayanlar Mavi değil Gri görünür.
+          colorClass = STATUS_COLORS['Default'];
         }
+
 
         let currentBarData: ProcessedItemData['barData'] = null;
         const currentVisualBars: ProcessedItemData['visualOnlyBars'] = [];
+
+        // YENİ: Baseline verisi için değişken
+        let baselineBarData: ProcessedItemData['baselineBarData'] = null;
+
         let currentDependencies: DependencyLink[] = [];
         let validBarCount = 0;
 
+        // 1. NORMAL BARLAR
         activeTimelineIds.forEach((timelineId) => {
           const timelineValue = item.itemValues.find(v => v.columnId === timelineId)?.value;
 
@@ -200,7 +218,7 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                 validBarCount++;
                 const leftDays = differenceInCalendarDays(startDate, viewMinDate);
                 const durationDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
-                if (isNaN(leftDays)) return; 
+                if (isNaN(leftDays)) return;
                 const startX = leftDays * dayWidthPx;
                 const width = durationDays * dayWidthPx;
 
@@ -223,7 +241,7 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                 };
 
                 if (!currentBarData) {
-                  currentBarData = bar; 
+                  currentBarData = bar;
                 } else {
                   currentVisualBars.push(bar);
                 }
@@ -231,6 +249,42 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
             }
           }
         });
+
+        // 2. BASELINE HESAPLAMA (YENİ)
+        if (activeBaselineId) {
+          const baselineValue = item.itemValues.find(v => v.columnId === activeBaselineId)?.value;
+          if (baselineValue) {
+            const [bStartStr, bEndStr] = baselineValue.split('/');
+            if (bStartStr && bEndStr) {
+              try {
+                const bStartDate = parseISO(bStartStr);
+                const bEndDate = parseISO(bEndStr);
+                if (!isNaN(bStartDate.getTime()) && !isNaN(bEndDate.getTime()) && bEndDate >= bStartDate) {
+                  const bLeftDays = differenceInCalendarDays(bStartDate, viewMinDate);
+                  const bDurationDays = Math.max(1, differenceInCalendarDays(bEndDate, bStartDate) + 1);
+                  const bStartX = bLeftDays * dayWidthPx;
+                  const bWidth = bDurationDays * dayWidthPx;
+
+                  baselineBarData = {
+                    style: {
+                      // Yükseklik ve top değeri GanttBarRow içinde override edilecek
+                      height: `${GANTT_BAR_HEIGHT_PX}px`,
+                      left: `${bStartX}px`,
+                      width: `${bWidth}px`
+                    },
+                    colorClass: 'bg-gray-400', // Sabit renk
+                    startX: bStartX,
+                    endX: bStartX + bWidth,
+                    startDate: bStartDate,
+                    endDate: bEndDate,
+                    timelineColumnId: activeBaselineId,
+                    timelineColumnTitle: 'Baseline'
+                  };
+                }
+              } catch (e) { /* Parse hatası */ }
+            }
+          }
+        }
 
         if (dependencyColumnId) {
           const depValue = item.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
@@ -254,6 +308,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
           rowSpan: itemRowCount,
           barData: currentBarData,
           visualOnlyBars: currentVisualBars,
+          // YENİ: Baseline datayı ekle
+          baselineBarData: baselineBarData,
           dependencies: currentDependencies,
           primaryTimelineColumnId: currentBarData ? currentBarData.timelineColumnId : null,
           externalLabel: externalLabel
@@ -264,11 +320,14 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
     });
     return dataMap;
   }, [
-    groups, items, activeTimelineIds, viewMinDate, collapsedGroupIds, 
-    dayWidthPx, labelById, colorByColumnId, dependencyColumnId, allUsers, columns
+    groups, items, activeTimelineIds, viewMinDate, collapsedGroupIds,
+    dayWidthPx, labelById, colorByColumnId, dependencyColumnId, allUsers, columns,
+    activeBaselineId // <-- DEPENDENCY EKLENDİ
   ]);
 
-   const groupedProcessedItems = useMemo(() => {
+  // ... geri kalan kodlar aynı ...
+
+  const groupedProcessedItems = useMemo(() => {
     const grouped = new Map<number, ProcessedItemData[]>();
     processedData.forEach(itemData => {
       const groupItems = grouped.get(itemData.item.groupId) ?? [];
@@ -287,7 +346,7 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
 
     groups.forEach(group => {
       if (!collapsedGroupIds.has(group.id)) {
-        currentRow++; 
+        currentRow++;
         indices.set(group.id, currentRow);
 
         const groupItems = groupedProcessedItems.get(group.id) ?? [];
@@ -323,10 +382,10 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
     });
 
     const totalRows = visibleGroups.length + totalItemRows;
-    return Math.max(0, totalRows - 1); 
+    return Math.max(0, totalRows - 1);
 
   }, [groups, items, collapsedGroupIds, activeTimelineIds]);
-  
+
   const totalHeight = (maxRowIndex + 1) * GANTT_ROW_HEIGHT_PX;
   const totalDays = differenceInCalendarDays(viewMaxDate, viewMinDate) + 1;
   const totalWidth = Math.max(100, totalDays * dayWidthPx);
@@ -438,7 +497,7 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
     });
     return map;
   }, [buildPreviewItemData, processedData]);
-  
+
   return (
     <div ref={paneRef} className="w-full relative bg-primary-background "
       style={{ minWidth: `${totalWidth}px` }}
@@ -484,14 +543,11 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                 })
                 .map(itemData => {
                   const previewItemData = previewProcessedData.get(itemData.item.id) || itemData;
-                  
-                  // DÜZELTME BURADA:
-                  // Bu item şu anda sürükleniyor mu veya resize ediliyor mu?
-                  const isItemDraggingOrResizing = 
+
+                  const isItemDraggingOrResizing =
                     (isDragging && draggedItemData?.item.id === itemData.item.id) ||
                     (isResizing && resizedItemData?.item.id === itemData.item.id);
 
-                  // isHovered durumu
                   const isHovered = hoveredItemId === itemData.item.id;
 
                   return (
@@ -499,13 +555,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                       <GanttBarRow
                         itemData={previewItemData}
                         originalItemData={itemData}
-                        
-                        // isActive: Görsel vurgulama (highlight) için. Hem hover hem drag durumunda true.
                         isActive={isItemDraggingOrResizing || isHovered}
-                        
-                        // isDragging: Tarih etiketlerinin görünmesi için. SADECE drag/resize durumunda true.
-                        isDragging={!!isItemDraggingOrResizing} 
-
+                        isDragging={!!isItemDraggingOrResizing}
                         onBarMouseDown={handleMouseDownOnBar}
                         onResizeHandleMouseDown={handleMouseDownOnResizeHandle}
                         onMouseEnter={() => handleBarMouseEnter(itemData.item.id)}

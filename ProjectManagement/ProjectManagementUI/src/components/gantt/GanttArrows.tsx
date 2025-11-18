@@ -1,4 +1,5 @@
 // src/components/gantt/GanttArrows.tsx
+
 import React, { useMemo } from 'react';
 import { type DependencyLink } from '../../types';
 import {
@@ -6,6 +7,7 @@ import {
     GANTT_ARROW_VERTICAL_MID_OFFSET
 } from '../common/constants';
 
+// Bar Verisi Tipi
 export interface BarTimelineData {
     style: React.CSSProperties;
     colorClass: string;
@@ -17,26 +19,27 @@ export interface BarTimelineData {
     timelineColumnTitle: string;
 }
 
-// Sabitler (Değişiklik yok)
+// Sabitler
 const ARROW_CORNER_RADIUS = 5;
 const ARROW_HORIZONTAL_BUFFER = 3;
 const MARKER_WIDTH = 10;
 const ARROW_VERTICAL_DETOUR_HEIGHT = 12;
 const ARROW_DETOUR_STEP = 6;
 
+// İşlenmiş Veri Tipi 
 export interface ProcessedItemData {
     item: { id: number, name: string, groupId: number };
     rowIndex: number;
-     rowSpan: number;
-    barData: BarTimelineData | null; // Birincil bar (Oklar bunu kullanır)
-    visualOnlyBars: BarTimelineData[]; // Kopya barlar
+    rowSpan: number;
+    barData: BarTimelineData | null; // Birincil (Aktif) Bar
+    
+    // YENİ: Temel Çizgi (Baseline) Barı
+    // Eğer null ise o satır için baseline yok demektir.
+    baselineBarData: BarTimelineData | null;
+
+    visualOnlyBars: BarTimelineData[]; // Kopyalar (Split mode için)
     dependencies: DependencyLink[];
-
-    // --- YENİ ALAN ---
-    // Bağımlılıkların bağlı olduğu ana barın 'timelineColumnId'si
     primaryTimelineColumnId: number | null;
-    // --- YENİ ALAN SONU ---
-
     externalLabel?: string;
 }
 
@@ -52,17 +55,12 @@ interface GanttArrowsProps {
     hoveredItemId: number | null;
 }
 
-// --- HESAPLAMA HOOK'U (useCalculateArrows) ---
-// Bu hook'un içinde HİÇBİR DEĞİŞİKLİK YOK.
-// Oklar zaten 'barData'yı (birincil bar) kullanacak şekilde
-// doğru yazılmış.
+// --- HESAPLAMA HOOK'U (Değişiklik Yok) ---
 const useCalculateArrows = (processedData: Map<number, ProcessedItemData>): ArrowData[] => {
     return useMemo(() => {
         const arrowList: ArrowData[] = [];
         if (!processedData.size) return arrowList;
 
-        // ... (Mevcut 'useCalculateArrows' kodunun tamamı buraya gelecek)
-        // ... (Hiçbir değişiklik yok)
         const horizontalDetourOffsets = new Map<number, number>();
 
         processedData.forEach((succ, succId) => {
@@ -84,19 +82,23 @@ const useCalculateArrows = (processedData: Map<number, ProcessedItemData>): Arro
                 const radius = ARROW_CORNER_RADIUS;
                 let path: string;
 
-                const vDir = Math.sign(succ.rowIndex - pred.rowIndex); // 0, 1, -1
+                const vDir = Math.sign(succ.rowIndex - pred.rowIndex);
                 const sourceIsLeft = link.type === 'SS' || link.type === 'SF';
                 const targetIsLeft = link.type === 'SS' || link.type === 'FS';
-                const hDir = sourceIsLeft ? -1 : 1; // Yatay çıkış yönü
-                const targetHDir = targetIsLeft ? -1 : 1; // Yatay giriş yönü
+                const hDir = sourceIsLeft ? -1 : 1;
+                const targetHDir = targetIsLeft ? -1 : 1;
+
                 switch (link.type) {
                     case 'SS': startX = predBar.startX - hBuffer; endX = succBar.startX - hBuffer - MARKER_WIDTH; break;
                     case 'FF': startX = predBar.endX + hBuffer; endX = succBar.endX + hBuffer + MARKER_WIDTH; break;
                     case 'SF': startX = predBar.startX - hBuffer; endX = succBar.endX + hBuffer + MARKER_WIDTH; break;
                     case 'FS': default: startX = predBar.endX + hBuffer; endX = succBar.startX - hBuffer - MARKER_WIDTH; break;
                 }
+                
                 const startY = predBaseY + GANTT_ARROW_VERTICAL_MID_OFFSET;
                 const endY = succBaseY + GANTT_ARROW_VERTICAL_MID_OFFSET;
+
+                // ... (Ok çizim mantığı aynı kalır) ...
                 if (vDir === 0) {
                     const needsDetour = (hDir === 1 && startX >= endX) || (hDir === -1 && startX <= endX) || Math.abs(startX - endX) < (hExitOffset + radius);
                     if (needsDetour) {
@@ -131,120 +133,47 @@ const useCalculateArrows = (processedData: Map<number, ProcessedItemData>): Arro
         return arrowList;
     }, [processedData, GANTT_ROW_HEIGHT_PX, GANTT_ARROW_VERTICAL_MID_OFFSET]);
 };
-// --- HESAPLAMA HOOK'U SONU ---
 
-// GanttArrows bileşeni
+// GanttArrows Bileşeni
 const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, totalHeight, hoveredItemId }) => {
     const arrows = useCalculateArrows(processedData);
-
     const defaultColor = '#A0AEC0';
     const highlightColor = '#071b2eff';
-    const highlightWidth = '1.5';
 
-    // Okun vurgulanıp vurgulanmayacağını kontrol eden map'i oluştur
     const arrowHighlightMap = useMemo(() => {
         const map = new Map<string, boolean>();
         if (hoveredItemId === null) return map;
-
-        const isHighlighted = (predId: number, succId: number) => {
-            if (predId === hoveredItemId) return true;
-            if (succId === hoveredItemId) return true;
-            return false;
-        };
+        const isHighlighted = (predId: number, succId: number) => (predId === hoveredItemId || succId === hoveredItemId);
 
         processedData.forEach((succ, succId) => {
             succ.dependencies.forEach(link => {
-                const predId = link.id;
-                const arrowId = `arrow-${predId}-${succId}-${link.type}`;
-                if (isHighlighted(predId, succId)) {
-                    map.set(arrowId, true);
+                if (isHighlighted(link.id, succId)) {
+                    map.set(`arrow-${link.id}-${succId}-${link.type}`, true);
                 }
             });
         });
-
         return map;
-
     }, [hoveredItemId, processedData]);
 
-    // Hesaplanan okları çiz
     const normalArrows = arrows.filter(a => !arrowHighlightMap.get(a.id));
     const highlightedArrows = arrows.filter(a => arrowHighlightMap.get(a.id));
 
     return (
-        <svg
-            width={totalWidth}
-            height={totalHeight}
-            className="absolute top-0 left-0 pointer-events-none"
-            style={{ zIndex: 10 }}
-        >
-            {/* Marker Tanımları */}
+        <svg width={totalWidth} height={totalHeight} className="absolute top-0 left-0 pointer-events-none" style={{ zIndex: 10 }}>
             <defs>
-                <marker
-                    id="arrowhead-default"
-                    markerWidth={MARKER_WIDTH}
-                    markerHeight="6"
-                    refX="0"
-                    refY="3"
-                    orient="auto"
-                    markerUnits="strokeWidth"
-                >
+                <marker id="arrowhead-default" markerWidth={MARKER_WIDTH} markerHeight="6" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
                     <polygon points="0 0, 8 3, 0 6" fill={defaultColor} />
                 </marker>
-                <marker
-                    id="arrowhead-highlight"
-                    markerWidth={MARKER_WIDTH}
-                    markerHeight="6"
-                    refX="0"
-                    refY="3"
-                    orient="auto"
-                    markerUnits="strokeWidth"
-                >
+                <marker id="arrowhead-highlight" markerWidth={MARKER_WIDTH} markerHeight="6" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
                     <polygon points="0 0, 8 3, 0 6" fill={highlightColor} />
                 </marker>
             </defs>
-
-            {/* 1) Normal oklar (alta) */}
             {normalArrows.map(arrow => (
-                <path
-                    key={arrow.id}
-                    d={arrow.path}
-                    fill="none"
-                    stroke={defaultColor}
-                    strokeWidth="1.5"
-                    markerEnd="url(#arrowhead-default)"
-                />
+                <path key={arrow.id} d={arrow.path} fill="none" stroke={defaultColor} strokeWidth="1.5" markerEnd="url(#arrowhead-default)" />
             ))}
-
-            {/* 2) Highlight oklar (üste) */}
             {highlightedArrows.map(arrow => (
-                <path
-                    key={arrow.id}
-                    d={arrow.path}
-                    fill="none"
-                    stroke={highlightColor}
-                    strokeWidth="1.5"
-                    markerEnd="url(#arrowhead-highlight)"
-                />
+                <path key={arrow.id} d={arrow.path} fill="none" stroke={highlightColor} strokeWidth="1.5" markerEnd="url(#arrowhead-highlight)" />
             ))}
-
-            {/* Hesaplanan okları çiz */}
-            {/* {arrows.map(arrow => {
-                const isHighlighted = arrowHighlightMap.get(arrow.id) || false;
-                const strokeColor = isHighlighted ? highlightColor : defaultColor;
-                const strokeWidth = isHighlighted ? highlightWidth : '1.5';
-                const markerId = isHighlighted ? 'arrowhead-highlight' : 'arrowhead-default';
-
-                return (
-                    <path
-                        key={arrow.id}
-                        d={arrow.path}
-                        fill="none"
-                        stroke={strokeColor}
-                        strokeWidth={strokeWidth}
-                        markerEnd={`url(#${markerId})`}
-                    />
-                );
-            })} */}
         </svg>
     );
 };

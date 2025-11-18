@@ -60,10 +60,6 @@ const Modal: React.FC<ModalProps> = ({
                     <h2 className="text-2xl font-bold p-6 pb-4">{title}</h2>
                 )}
                 
-                {/* GÜNCELLEME: 'overflow-auto' artık koşullu. 
-                    'disableContentScroll' true ise 'overflow-hidden' (iç scroll çalışsın), 
-                    değilse 'overflow-auto' (dış scroll çalışsın) olur.
-                */}
                 <div className={`flex-1 ${disableContentScroll ? 'overflow-hidden' : 'overflow-auto'} ${hasTitle ? 'px-6 pb-6' : 'p-0'}`}>
                     {children}
                 </div>

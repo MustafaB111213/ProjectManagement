@@ -59,7 +59,6 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
     // Ay > Hafta Görünümü (Orta zoom)
     // Geriye kalan her şey (10px'ten büyük, 30px'e eşit veya küçük) 'Hafta'dır. (Index 4-7)
     const isWeekZoom = !isMonthZoom && !isDayZoom;
-    // --- GÜNCELLEME SONU ---
 
     // --- Üst Başlık (Aylar veya Yıllar) ---
     const topHeaderIntervals = useMemo((): IntervalGroup[] => {

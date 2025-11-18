@@ -1,28 +1,32 @@
+// src/components/gantt/GanttBarRow.tsx
+
 import React from 'react';
 import { format } from 'date-fns';
 import { type ProcessedItemData, type BarTimelineData } from './GanttArrows';
 import {
     GANTT_ROW_HEIGHT_PX,
-    GANTT_BAR_TOP_OFFSET_PX
+    GANTT_BAR_TOP_OFFSET_PX,
+    GANTT_BAR_HEIGHT_PX
 } from '../common/constants';
 
 // Sabitler
 const RESIZE_HANDLE_WIDTH_PX = 8;
-
-// Tip Tanımları
-type ResizeSide = 'start' | 'end';
+// Baseline Ayarları
+const BASELINE_HEIGHT_PX = 8; // Daha ince bir çizgi
+// Ana barın tam ortasına hizalamak için offset hesaplaması:
+// (Bar Yüksekliği - Baseline Yüksekliği) / 2 + Barın Tepesi
+const BASELINE_CENTER_OFFSET = (GANTT_BAR_HEIGHT_PX - BASELINE_HEIGHT_PX) / 20;
 
 interface GanttBarRowProps {
     itemData: ProcessedItemData;
     originalItemData: ProcessedItemData;
     isActive: boolean;
-    // YENİ PROP: Sadece sürükleme/boyutlandırma durumunu kontrol eder
-    isDragging: boolean; 
+    isDragging: boolean;
     onBarMouseDown: (event: React.MouseEvent, itemData: ProcessedItemData, timelineColumnId: number) => void;
     onResizeHandleMouseDown: (
         event: React.MouseEvent,
         itemData: ProcessedItemData,
-        side: ResizeSide,
+        side: 'start' | 'end',
         timelineColumnId: number
     ) => void;
     onMouseEnter: () => void;
@@ -32,59 +36,37 @@ interface GanttBarRowProps {
 const _GanttBarRow: React.FC<GanttBarRowProps> = ({
     itemData,
     originalItemData,
-    isActive,     // Bu hem hover hem drag için true olabilir (görsel highlight için)
-    isDragging,   // Bu SADECE drag/resize anında true olur (etiketler için)
+    isActive,
+    isDragging,
     onBarMouseDown,
     onResizeHandleMouseDown,
     onMouseEnter,
     onMouseLeave,
 }) => {
-    const { barData, visualOnlyBars } = itemData;
-    const { barData: originalBarData, visualOnlyBars: originalVisualBars } = originalItemData;
+    const { barData, visualOnlyBars, baselineBarData } = itemData;
+    const { barData: originalBarData } = originalItemData;
 
     const baseTop = itemData.rowIndex * GANTT_ROW_HEIGHT_PX;
 
-    // Badge'leri render eden yardımcı fonksiyon
+    // Helper: Date Badges
     const renderDateBadges = (bar: BarTimelineData, top: number) => {
-        // DÜZELTME: Sadece 'isDragging' true ise render et (hover'da görünmez)
         if (!isDragging) return null;
-
         if (!bar.startDate || !bar.endDate) return null;
 
         const formattedStart = format(bar.startDate, 'dd.MM.yyyy');
-        
-        // DÜZELTME: 1 gün çıkarma işlemi İPTAL EDİLDİ. Doğrudan tarihi göster.
         const formattedEnd = format(bar.endDate, 'dd.MM.yyyy');
-        
-        const badgeOffset = 22; 
-        const baseBadgeStyle = "absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-100 text-black text-[10px] font-semibold shadow-sm pointer-events-none z-[20]";
+        const badgeOffset = 22;
+        const baseBadgeStyle = "absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold shadow-sm pointer-events-none z-[30]"; // Z-index artırıldı
 
         return (
             <React.Fragment>
-                {/* Başlangıç Tarihi */}
-                <div
-                    className={baseBadgeStyle}
-                    style={{
-                        top: `${top - badgeOffset}px`,
-                        left: `${bar.startX}px`,
-                        whiteSpace: 'nowrap'
-                    }}
-                >
+                <div className={baseBadgeStyle} style={{ top: `${top - badgeOffset}px`, left: `${bar.startX}px`, whiteSpace: 'nowrap' }}>
                     {formattedStart}
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-100"></div>
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-800"></div>
                 </div>
-
-                {/* Bitiş Tarihi */}
-                <div
-                    className={baseBadgeStyle}
-                    style={{
-                        top: `${top - badgeOffset}px`,
-                        left: `${bar.endX}px`, // Tam bitiş noktası
-                        whiteSpace: 'nowrap'
-                    }}
-                >
+                <div className={baseBadgeStyle} style={{ top: `${top - badgeOffset}px`, left: `${bar.endX}px`, whiteSpace: 'nowrap' }}>
                     {formattedEnd}
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-100"></div>
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-800"></div>
                 </div>
             </React.Fragment>
         );
@@ -92,7 +74,8 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
 
     return (
         <React.Fragment>
-            {/* 1. BİRİNCİL BAR */}
+            
+            {/* 1. BİRİNCİL BAR (Normal Görev) */}
             {barData && (
                 <React.Fragment>
                     <div
@@ -100,11 +83,12 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                         onMouseEnter={onMouseEnter}
                         onMouseLeave={onMouseLeave}
                         onMouseDown={(e) => onBarMouseDown(e, itemData, barData.timelineColumnId)}
+                        // Z-Index: Normal 11, Aktif 12. Baseline'ın bunun üstüne çıkması için Baseline'a daha yüksek veriyoruz.
                         className={`rounded text-white text-xs px-2 flex items-center overflow-hidden absolute cursor-grab group ${barData.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
                         style={{
                             ...barData.style,
                             position: 'absolute',
-                            top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX}px`,
+                            top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX}px`, 
                             zIndex: isActive ? 12 : 11,
                             transition: isActive ? 'none' : 'all 150ms ease',
                         }}
@@ -123,13 +107,31 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                             style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
                         ></div>
                     </div>
-
-                    {/* Etiketler (Sadece isDragging true ise render olur) */}
                     {renderDateBadges(barData, baseTop + GANTT_BAR_TOP_OFFSET_PX)}
                 </React.Fragment>
             )}
 
-            {/* 1.1 SİLÜET */}
+            {/* 0. TEMEL ÇİZGİ (BASELINE) */}
+            {/* Ana barın ÜZERİNDE ince siyah/gri bir çizgi olarak görünür */}
+            {baselineBarData && (
+                <div
+                    className="absolute rounded-full pointer-events-none border border-gray-600 shadow-sm"
+                    style={{
+                        left: `${baselineBarData.startX}px`,
+                        width: `${Math.max(2, baselineBarData.endX - baselineBarData.startX)}px`,
+                        // Barın tam ortasından geçecek şekilde konumlandırıldı
+                        top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX + BASELINE_CENTER_OFFSET}px`, 
+                        height: `${BASELINE_HEIGHT_PX}px`,
+                        zIndex: 12, 
+                        backgroundColor: '#4e3694ff', // Koyu gri (gray-700)
+                        opacity: 0.85, // Hafif şeffaflık
+                        // Tarama efekti (İsteğe bağlı, şu an düz renk daha net görünür)
+                    }}
+                    title={`Temel Çizgi: ${format(baselineBarData.startDate, 'dd MMM')} - ${format(baselineBarData.endDate, 'dd MMM')}`}
+                />
+            )}
+
+            {/* 1.1 SİLÜET (Sürükleme Hayaleti) */}
             {isDragging && originalBarData && barData && (originalBarData.startX !== barData.startX || originalBarData.endX !== barData.endX) && (
                 <div
                     className="rounded border-2 border-dashed border-blue-400 bg-blue-50 absolute pointer-events-none"
@@ -147,7 +149,6 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
             {visualOnlyBars.map((bar, index) => {
                 const copyRowIndex = index + 1;
                 const visualBarTop = (itemData.rowIndex + copyRowIndex) * GANTT_ROW_HEIGHT_PX + GANTT_BAR_TOP_OFFSET_PX;
-
                 return (
                     <React.Fragment key={`${itemData.item.id}-visual-${index}`}>
                         <div
@@ -162,51 +163,17 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                                 zIndex: isActive ? 12 : 11,
                                 transition: isActive ? 'none' : 'all 150ms ease',
                             }}
-                            title={`${itemData.item.name} (${bar.timelineColumnTitle})`}
                         >
-                             <div
-                                data-resize-handle="start"
-                                onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', bar.timelineColumnId)}
-                                className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-l"
-                                style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
-                            ></div>
-                            <div
-                                data-resize-handle="end"
-                                onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', bar.timelineColumnId)}
-                                className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-r"
-                                style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
-                            ></div>
+                             <div data-resize-handle="start" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', bar.timelineColumnId)} className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-l" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
+                            <div data-resize-handle="end" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', bar.timelineColumnId)} className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-r" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
                         </div>
                         {renderDateBadges(bar, visualBarTop)}
                     </React.Fragment>
                 );
             })}
 
-            {/* 2.1 KOPYA SİLÜETLER */}
-            {isDragging && originalVisualBars.map((bar, index) => {
-                const copyRowIndex = index + 1;
-                const visualBarTop = (itemData.rowIndex + copyRowIndex) * GANTT_ROW_HEIGHT_PX + GANTT_BAR_TOP_OFFSET_PX;
-                const previewBar = visualOnlyBars[index];
-                if (!previewBar) return null;
-                if (bar.startX === previewBar.startX && bar.endX === previewBar.endX) return null;
-
-                return (
-                    <div
-                        key={`${itemData.item.id}-visual-silhouette-${index}`}
-                        className="rounded border-2 border-dashed border-blue-400 bg-blue-50 absolute pointer-events-none"
-                        style={{
-                            ...bar.style,
-                            position: 'absolute',
-                            top: `${visualBarTop}px`,
-                            zIndex: 9,
-                            opacity: 0.5,
-                        }}
-                    />
-                );
-            })}
-
-            {/* 3. DIŞ ETİKET */}
-            {itemData.barData && itemData.externalLabel && (
+             {/* 3. DIŞ ETİKET */}
+             {itemData.barData && itemData.externalLabel && (
                 <div
                     className="absolute flex items-center px-3 text-xs text-gray-700 pointer-events-none truncate"
                     style={{

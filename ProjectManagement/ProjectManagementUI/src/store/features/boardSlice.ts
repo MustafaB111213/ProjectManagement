@@ -103,12 +103,12 @@ const boardSlice = createSlice({
                 state.status = 'failed';
                 state.error = action.error.message || 'Something went wrong';
             })
-            // YENİ CASE: Pano başarıyla oluşturulduğunda
+            // Pano başarıyla oluşturulduğunda
             .addCase(createBoard.fulfilled, (state, action: PayloadAction<Board>) => {
                 // Yeni panoyu mevcut pano listesine ekle.
                 // Bu sayede sayfa yenilemeden arayüz anında güncellenir!
                 state.items.push(action.payload);
-            })// YENİ CASE: Pano başarıyla güncellendiğinde
+            })// Pano başarıyla güncellendiğinde
             .addCase(updateBoard.fulfilled, (state, action: PayloadAction<Board>) => {
                 const updatedBoard = action.payload;
                 const index = state.items.findIndex(b => b.id === updatedBoard.id);
@@ -116,7 +116,7 @@ const boardSlice = createSlice({
                     state.items[index] = { ...state.items[index], ...updatedBoard };
                 }
             })
-            // YENİ CASE: Pano başarıyla silindiğinde
+            // Pano başarıyla silindiğinde
             .addCase(deleteBoard.fulfilled, (state, action: PayloadAction<number>) => {
                 const deletedBoardId = action.payload;
                 // Panoyu listeden kaldır

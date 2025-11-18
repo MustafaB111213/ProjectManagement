@@ -19,12 +19,12 @@ export interface CreateBoardViewPayload {
     type: string; // 'Table' veya 'Gantt'
 }
 
-// --- YENİ: Güncelleme (Yeniden Adlandırma) için Payload Tipi ---
+// --- Güncelleme (Yeniden Adlandırma) için Payload Tipi ---
 export interface UpdateBoardViewPayload {
     name: string;
 }
 
-// YENİ: Ayarları güncellemek için payload tipi
+// Ayarları güncellemek için payload tipi
 export interface UpdateBoardViewSettingsPayload {
     settingsJson: string; // Ayarların tamamını string olarak göndereceğiz
 }
@@ -76,7 +76,7 @@ export const createBoardView = createAsyncThunk<
             body: JSON.stringify(payload),
         });
         if (!response.ok) {
-             const errorText = await response.text();
+            const errorText = await response.text();
             throw new Error(errorText || `Server Error: ${response.status}`);
         }
         return (await response.json()) as BoardViewData;
@@ -96,7 +96,7 @@ export const deleteBoardView = createAsyncThunk<
             method: 'DELETE',
         });
         if (!response.ok) {
-             const errorText = await response.text();
+            const errorText = await response.text();
             throw new Error(errorText || `Server Error: ${response.status}`);
         }
         // Backend 204 No Content döndüreceği için bir şey parse etmeye gerek yok.
@@ -112,46 +112,43 @@ export const updateBoardView = createAsyncThunk<
     { boardId: number; viewId: number; payload: UpdateBoardViewPayload },
     { rejectValue: string; state: RootState } // getState için RootState eklendi
 >(
-  'boardViews/updateBoardView',
-  async ({ boardId, viewId, payload }, { dispatch, rejectWithValue, getState }) => {
-    try {
-        
-        // --- GÜNCELLEME BAŞLANGICI ---
-        // 1. Mevcut state'i al
-        const state = getState();
-        // 2. Güncellenen görünümün mevcut verisini state'den bul
-        const currentView = state.boardViews.views.find(v => v.id === viewId);
+    'boardViews/updateBoardView',
+    async ({ boardId, viewId, payload }, { dispatch, rejectWithValue, getState }) => {
+        try {
+            // 1. Mevcut state'i al
+            const state = getState();
+            // 2. Güncellenen görünümün mevcut verisini state'den bul
+            const currentView = state.boardViews.views.find(v => v.id === viewId);
 
-        if (!currentView) {
-            throw new Error("Güncellenecek görünüm mevcut state'de bulunamadı.");
+            if (!currentView) {
+                throw new Error("Güncellenecek görünüm mevcut state'de bulunamadı.");
+            }
+
+            // 3. Payload'ı birleştir:
+            // YENİ Adı ve ESKİ ayarları birleştir (ezilmemesi için)
+            const combinedPayload = {
+                ...payload, // { name: "Yeni Ad" }
+                settingsJson: currentView.settingsJson // { settingsJson: "{\"activeTimelineId\":5}" }
+            };
+
+            const response = await fetch(`${API_BASE_URL}/boards/${boardId}/views/${viewId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(combinedPayload), // Birleştirilmiş payload'ı gönder
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Server Error: ${response.status}`);
+            }
+
+            // Backend 'Ok(updatedView)' döndüğü için JSON'u parse et
+            return (await response.json()) as BoardViewData;
+
+        } catch (error: any) {
+            return rejectWithValue(error.message || 'Görünüm yeniden adlandırılamadı');
         }
-
-        // 3. Payload'ı birleştir:
-        // YENİ Adı ve ESKİ ayarları birleştir (ezilmemesi için)
-        const combinedPayload = {
-            ...payload, // { name: "Yeni Ad" }
-            settingsJson: currentView.settingsJson // { settingsJson: "{\"activeTimelineId\":5}" }
-        };
-        // --- GÜNCELLEME SONU ---
-        
-      const response = await fetch(`${API_BASE_URL}/boards/${boardId}/views/${viewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(combinedPayload), // Birleştirilmiş payload'ı gönder
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Server Error: ${response.status}`);
-      }
-
-      // Backend 'Ok(updatedView)' döndüğü için JSON'u parse et
-      return (await response.json()) as BoardViewData;
-
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Görünüm yeniden adlandırılamadı');
     }
-  }
 );
 
 
@@ -161,7 +158,7 @@ export const reorderBoardViews = createAsyncThunk<
     { boardId: number; orderedViewIds: number[] },
     { rejectValue: string }
 >('boardViews/reorderBoardViews', async ({ boardId, orderedViewIds }, { rejectWithValue }) => {
-     try {
+    try {
         const response = await fetch(`${API_BASE_URL}/boards/${boardId}/views/reorder`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -188,7 +185,7 @@ export const updateBoardViewSettings = createAsyncThunk<
         try {
             // 1. Mevcut state'i al
             const state = getState();
-            
+
             // 2. Güncellenen görünümün mevcut verisini state'den bul
             const currentView = state.boardViews.views.find(v => v.id === viewId);
 
@@ -213,7 +210,7 @@ export const updateBoardViewSettings = createAsyncThunk<
                 const errorText = await response.text();
                 throw new Error(errorText || `Server Error: ${response.status}`);
             }
-            
+
             // Backend'den güncellenmiş tam view nesnesini bekliyoruz
             return (await response.json()) as BoardViewData;
 
@@ -283,14 +280,14 @@ const boardViewSlice = createSlice({
 
                 // Eğer silinen görünüm aktif idiyse
                 if (state.activeViewId === deletedId) {
-                   // Silinenin bir sonrakini veya bir öncekini (veya ilkini) aktif yap
-                   const nextIndex = deletedIndex < state.views.length ? deletedIndex : deletedIndex - 1;
-                   state.activeViewId = state.views.length > 0 ? state.views[Math.max(0, nextIndex)].id : null;
+                    // Silinenin bir sonrakini veya bir öncekini (veya ilkini) aktif yap
+                    const nextIndex = deletedIndex < state.views.length ? deletedIndex : deletedIndex - 1;
+                    state.activeViewId = state.views.length > 0 ? state.views[Math.max(0, nextIndex)].id : null;
                 }
             })
-             .addCase(deleteBoardView.rejected, (state, action) => {
-                 state.error = action.payload ?? 'Görünüm silinemedi.';
-             })
+            .addCase(deleteBoardView.rejected, (state, action) => {
+                state.error = action.payload ?? 'Görünüm silinemedi.';
+            })
             // ----------------------------------------------
 
             // --- YENİ: updateBoardView case'leri ---
@@ -301,28 +298,28 @@ const boardViewSlice = createSlice({
                 const updatedViewData = action.payload; // Backend'den dönen veri
                 const index = state.views.findIndex(v => v.id === updatedViewData.id);
                 if (index !== -1) {
-                     // Backend'den tam nesne döndüğü için direkt değiştiriyoruz
-                     state.views[index] = updatedViewData;
+                    // Backend'den tam nesne döndüğü için direkt değiştiriyoruz
+                    state.views[index] = updatedViewData;
                 }
-                 state.error = null;
+                state.error = null;
             })
             .addCase(updateBoardView.rejected, (state, action) => {
                 state.error = action.payload ?? 'Görünüm yeniden adlandırılamadı.';
             })
-             // Görünüm Sıralama (Anlık güncelleme örneği)
-             .addCase(reorderBoardViews.pending, (state, action) => {
-                 // Anlık (Optimistic) Güncelleme: Backend'den yanıt beklemeden sıralamayı değiştir
-                 const orderedIds = action.meta.arg.orderedViewIds;
-                 const viewMap = new Map(state.views.map(v => [v.id, v]));
-                 state.views = orderedIds.map(id => viewMap.get(id)!)
-                                        .filter(Boolean) // Olası hatalara karşı
-                                        .map((view, index) => ({ ...view, order: index })); // Order'ı da güncelle
-             })
-             .addCase(reorderBoardViews.rejected, (state, action) => {
-                 state.error = action.payload ?? 'Sıralama güncellenemedi.';
-                 // TODO: Hata durumunda anlık güncellemeyi geri al (fetchViewsForBoard tekrar çağrılabilir)
-             })
-             // --- YENİ: Ayarları güncelleme case'i ---
+            // Görünüm Sıralama (Anlık güncelleme örneği)
+            .addCase(reorderBoardViews.pending, (state, action) => {
+                // Anlık (Optimistic) Güncelleme: Backend'den yanıt beklemeden sıralamayı değiştir
+                const orderedIds = action.meta.arg.orderedViewIds;
+                const viewMap = new Map(state.views.map(v => [v.id, v]));
+                state.views = orderedIds.map(id => viewMap.get(id)!)
+                    .filter(Boolean) // Olası hatalara karşı
+                    .map((view, index) => ({ ...view, order: index })); // Order'ı da güncelle
+            })
+            .addCase(reorderBoardViews.rejected, (state, action) => {
+                state.error = action.payload ?? 'Sıralama güncellenemedi.';
+                // TODO: Hata durumunda anlık güncellemeyi geri al (fetchViewsForBoard tekrar çağrılabilir)
+            })
+            // --- Ayarları güncelleme case'i ---
             .addCase(updateBoardViewSettings.fulfilled, (state, action) => {
                 const updatedView = action.payload;
                 const index = state.views.findIndex(v => v.id === updatedView.id);
@@ -334,7 +331,7 @@ const boardViewSlice = createSlice({
             .addCase(updateBoardViewSettings.rejected, (state, action) => {
                 state.error = action.payload ?? 'Ayar güncellenemedi';
             });
-            // ---------------------------------------
+        // ---------------------------------------
     },
 });
 

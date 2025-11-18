@@ -55,7 +55,6 @@ const DocumentCell: React.FC<DocumentCellProps> = ({ item, column }) => {
         // Ana div'e tıklama olayını ekle
         <div 
             onClick={handleCellClick} 
-            // GÜNCELLEME: 'w-full' ve 'overflow-hidden' eklenerek içerik sınırlanır
             className="w-full h-full flex items-center justify-center cursor-pointer group p-2 overflow-hidden" 
         >
             <input

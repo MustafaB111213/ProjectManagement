@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, createSelector, type PayloadAction } from '@reduxjs/toolkit';
-import type { Item, ItemValue, Group } from '../../types';
+import type { Item, ItemValue } from '../../types';
 import type { RootState } from '../store';
 import { API_BASE_URL } from '../../components/common/constants';
 
@@ -299,7 +299,7 @@ const itemSlice = createSlice({
             })
             // itemSlice.ts -> extraReducers içindeki case
 
-            // --- YENİ CASE (GÖREV ADINI GÜNCELLEMEK İÇİN) ---
+            // --- (GÖREV ADINI GÜNCELLEMEK İÇİN) ---
             .addCase(updateItem.fulfilled, (state, action) => {
                 // action.payload artık: { itemId, groupId, newName }
                 const { itemId, groupId, newName } = action.payload;
@@ -316,14 +316,11 @@ const itemSlice = createSlice({
             .addCase(updateItem.rejected, (state, action) => {
                 state.error = action.payload as string; // Payload artık bir string
             })
-            // --- YENİ CASE SONU ---
 
             // Item silme
-            // Item silme (GÜNCELLENDİ)
             .addCase(deleteItem.fulfilled, (state, action) => {
                 const idToDelete = action.payload; // Silinen item'ın ID'si
 
-                // HATA DÜZELTMESİ:
                 // Sadece 'meta.arg.groupId'ye güvenmek yerine, 
                 // item'ın nerede olduğunu bulmak için TÜM grupları döngüye al.
                 for (const groupId in state.itemsByGroup) {

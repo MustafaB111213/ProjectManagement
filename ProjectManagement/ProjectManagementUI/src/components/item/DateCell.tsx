@@ -16,7 +16,6 @@ const DateCell: React.FC<DateCellProps> = ({ item, column }) => {
     const dispatch = useAppDispatch();
     const currentValue = item.itemValues.find(v => v.columnId === column.id)?.value;
     
-    // GÜNCELLEME 1: Date nesnesini parseISO ile oluştur (daha güvenilir)
     // "YYYY-MM-DD" string'ini yerel saat diliminde gece yarısı olarak yorumlar.
     let selectedDate: Date | null = null;
     if (currentValue) {
@@ -36,7 +35,6 @@ const DateCell: React.FC<DateCellProps> = ({ item, column }) => {
     }
 
     const handleDateChange = (date: Date | null) => {
-        // GÜNCELLEME 2: Seçilen tarihi format ile "YYYY-MM-DD" string'ine çevir
         // date-fns format fonksiyonu genellikle saat dilimi sorunlarını daha iyi yönetir.
         const valueToSave = date ? format(date, 'yyyy-MM-dd') : '';
         dispatch(updateItemValue({
