@@ -17,5 +17,6 @@ namespace ProjectManagement.Application.DTOs.Column
         [Required(ErrorMessage = "Sütun tipi zorunludur.")]
         [Range(0, 6, ErrorMessage = "Geçersiz sütun tipi.")] // ColumnType enum aralığına göre (0-6)
         public ColumnType Type { get; set; }
+        public string? Settings { get; set; }
     }
 }

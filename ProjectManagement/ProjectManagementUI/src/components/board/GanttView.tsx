@@ -10,7 +10,7 @@ import { selectSelectedBoard } from '../../store/features/boardSlice';
 import GanttToolbar from '../gantt/GanttToolbar';
 import GanttLeftPanel from '../gantt/GanttLeftPanel';
 import GanttRightPanel from '../gantt/GanttRightPanel';
-import { isValid, parseISO } from 'date-fns';
+import { addDays, isValid, parseISO } from 'date-fns';
 import { MAX_ZOOM_INDEX, GANTT_ROW_HEIGHT_PX } from '../common/constants';
 import GanttBaselineModal from '../gantt/GanttBaselineModal';
 import ItemDetailModal from '../item/ItemDetailModal';
@@ -56,7 +56,7 @@ const GanttView: React.FC<GanttViewProps> = ({
     const { settingsState, settingsHandlers } = useGanttSettings(
         settingsJson, boardId, viewId, allColumns, columnStatus, allItems
     );
-    
+
     const {
         activeTimelineIds, groupByColumnId, colorByColumnId, labelById, activeBaselineId,
         setActiveTimelineIds, setGroupByColumnId, setColorByColumnId, setLabelById
@@ -116,6 +116,22 @@ const GanttView: React.FC<GanttViewProps> = ({
     const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
+    // Modal için hesaplanan başlangıç tarihi state'i
+    const [modalInitialDate, setModalInitialDate] = useState<Date>(new Date());
+    const handleOpenWidgetModal = () => {
+        // Modal açılmadan önce şu anki ekranın tam ortasındaki tarihi hesapla
+        if (rightPanelScrollRef.current) {
+            const scrollLeft = rightPanelScrollRef.current.scrollLeft;
+            const offsetWidth = rightPanelScrollRef.current.offsetWidth;
+            const centerPx = scrollLeft + (offsetWidth / 2);
+            const daysFromMin = centerPx / currentDayWidth;
+
+            const centerDate = addDays(viewMinDate, daysFromMin);
+            setModalInitialDate(centerDate);
+        }
+        setIsWidgetModalOpen(true);
+    };
+
     const displayData = useMemo(() => {
         if (!groupByColumnId) {
             return { groups: allGroups, items: allItems };
@@ -167,8 +183,6 @@ const GanttView: React.FC<GanttViewProps> = ({
         setSelectedItemId(null);
     };
     const handleToggleLeftPanel = useCallback(() => setIsLeftPanelOpen(prev => !prev), []);
-    const handleOpenWidgetModal = () => setIsWidgetModalOpen(true);
-
     const isLoading = columnStatus !== 'succeeded' || allGroups.length === 0;
     if (isLoading) {
         return <div className="p-4 text-center">Gantt Şeması Yükleniyor...</div>;
@@ -279,13 +293,25 @@ const GanttView: React.FC<GanttViewProps> = ({
                         setLabelById(id);
                         handleLabelByChange(id);
                     }}
-                    // YENİ: Baseline Ayarları
+
+                    // Baseline Ayarları
                     activeBaselineId={activeBaselineId}
                     onBaselineChange={handleBaselineChange}
                     onCreateBaseline={handleCreateBaseline}
-
-                    initialZoomIndex={zoomIndex}
                     onDeleteBaseline={handleDeleteBaseline}
+
+                    // --- SENKRONİZASYON AYARLARI (DEĞİŞEN KISIM) ---
+
+                    // 1. Zoom Senkronizasyonu: Artık initial değil, canlı prop
+                    zoomIndex={zoomIndex}
+                    onZoomIndexChange={onZoomIndexChange}
+
+                    // 2. Grup Aç/Kapa Senkronizasyonu
+                    collapsedGroupIds={collapsedGroupIds}
+                    onToggleGroup={handleToggleGroup}
+
+                    // 3. Scroll Pozisyonu (Tarih)
+                    initialDate={modalInitialDate}
                 />
             )}
 

@@ -1,11 +1,13 @@
+// src/types.ts
+
 // Backend'den gelen Board nesnesinin tip tanımı
 export interface Board {
     id: number;
     name: string;
-    description?: string; // Soru işareti bu alanın opsiyonel olduğunu belirtir
+    description?: string;
 }
 
-// YENİ: Backend'den gelen Group nesnesinin tip tanımı
+// Group nesnesinin tip tanımı
 export interface Group {
     id: number;
     title: string;
@@ -14,15 +16,15 @@ export interface Group {
     order: number;
 }
 
-// YENİ: ItemValue tipi
+// ItemValue tipi
 export interface ItemValue {
     id: number;
     value: string;
     itemId: number;
     columnId: number;
 }
-// YENİ: Backend'den gelen Item nesnesinin tip tanımı
-// Item tipi artık değerlerini de içeriyor
+
+// Item nesnesinin tip tanımı
 export interface Item {
     id: number;
     name: string;
@@ -31,7 +33,7 @@ export interface Item {
     order: number;
 }
 
-// YENİ: ColumnType enum'ı (Backend'deki ile aynı olmalı)
+// ColumnType enum'ı
 export enum ColumnType {
     Text = 0,
     Status = 1,
@@ -42,38 +44,43 @@ export enum ColumnType {
     Dependency = 6  
 }
 
-// YENİ: Column tipi
+// DependencyAction enum'ı
+export enum DependencyAction {
+  Ignore = 'ignore',   // Mod 1: Kontrol yok (Default)
+  Restrict = 'restrict', // Mod 2: İhlal varsa izin verme
+  AutoMove = 'autoMove'  // Mod 3: Zincirleme hareket (Auto-schedule)
+}
+
+// ColumnSettings Interface'i
+export interface ColumnSettings {
+    dependencyAction?: DependencyAction;
+}
+
+// Column tipi (DÜZELTİLDİ)
 export interface Column {
     id: number;
     title: string;
     type: ColumnType;
     boardId: number;
     order: number;
+    settings?: string; // <-- BURASI DÜZELTİLDİ: Artık JSON string tutuyor
 }
 
-// YENİ: Kullanıcıları temsil etmek için yeni bir tip ekleyelim.
+// User tipi
 export interface User {
     id: number;
-    name: string;
-    avatarUrl?: string; // Opsiyonel avatar resmi
-    initials: string; // Avatar yerine gösterilecek baş harfler
+    username: string; // name -> username, backend yapısına göre
+    email: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl?: string;
+    initials?: string; // İsteğe bağlı eklendi
 }
 
 export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
 
-// YENİ: Bağımlılık sütununun 'value' alanında saklanacak JSON yapısı için interface
-// Örnek: [{"id": 5, "type": "FS"}, {"id": 12, "type": "FS"}]
+// DependencyLink interface
 export interface DependencyLink {
-    id: number;       // Bağlı olunan (öncül) görevin ID'si
-    type: DependencyType; // Bağımlılık tipi
-}
-
-export interface User {
-    id: number;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    // avatarUrl backend'den gelmiyorsa, onu burada tutmuyoruz.
-    // Bileşen içinde Gravatar gibi bir servisten türetebiliriz.
+    id: number;       
+    type: DependencyType; 
 }

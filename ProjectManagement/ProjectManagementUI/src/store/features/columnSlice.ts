@@ -28,36 +28,36 @@ interface UpdateColumnOrderArgs {
 // columnSlice.ts
 
 export const updateColumnOrder = createAsyncThunk<void, UpdateColumnOrderArgs>(
-  'columns/updateColumnOrder',
-  async ({ boardId, orderedColumnIds }) => {
-    
-    // --- ÇOK ÖNEMLİ DÜZELTME ---
-    // Hata logu, /order URL'sinin backend'de /:columnId olarak 
-    // yorumlandığını gösteriyor. BU YANLIŞTIR.
-    // Backend'inizdeki "Tüm sütunların sırasını" güncelleyen
-    // endpoint'in doğru URL'sini buraya girmelisiniz.
-    // 
-    // "reorder" olduğunu varsayıyorum. Lütfen backend'den teyit edin.
-    const response = await fetch(`${API_BASE_URL}/boards/${boardId}/columns/reorder`, { 
-      // --- ESKİ YANLIŞ URL ---
-      // const response = await fetch(`${API_BASE_URL}/boards/${boardId}/columns/order`, {
-      // --- DÜZELTME SONU ---
+    'columns/updateColumnOrder',
+    async ({ boardId, orderedColumnIds }) => {
 
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      
-      // Önceki düzeltmemiz (nesne olarak yollamak) muhtemelen hala geçerli.
-      // Backend'inizin [FromBody] kısmının bir nesne beklemesi çok olası.
-      body: JSON.stringify({ orderedColumnIds: orderedColumnIds }),
-    });
+        // --- ÇOK ÖNEMLİ DÜZELTME ---
+        // Hata logu, /order URL'sinin backend'de /:columnId olarak 
+        // yorumlandığını gösteriyor. BU YANLIŞTIR.
+        // Backend'inizdeki "Tüm sütunların sırasını" güncelleyen
+        // endpoint'in doğru URL'sini buraya girmelisiniz.
+        // 
+        // "reorder" olduğunu varsayıyorum. Lütfen backend'den teyit edin.
+        const response = await fetch(`${API_BASE_URL}/boards/${boardId}/columns/reorder`, {
+            // --- ESKİ YANLIŞ URL ---
+            // const response = await fetch(`${API_BASE_URL}/boards/${boardId}/columns/order`, {
+            // --- DÜZELTME SONU ---
 
-    if (!response.ok) {
-      // Hata detayını konsola yazdırmak daha faydalı olabilir
-      const errorData = await response.text(); // .json() da olabilir
-      console.error('Backend Hatası:', errorData);
-      throw new Error('Sütun sırası güncellenemedi');
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+
+            // Önceki düzeltmemiz (nesne olarak yollamak) muhtemelen hala geçerli.
+            // Backend'inizin [FromBody] kısmının bir nesne beklemesi çok olası.
+            body: JSON.stringify({ orderedColumnIds: orderedColumnIds }),
+        });
+
+        if (!response.ok) {
+            // Hata detayını konsola yazdırmak daha faydalı olabilir
+            const errorData = await response.text(); // .json() da olabilir
+            console.error('Backend Hatası:', errorData);
+            throw new Error('Sütun sırası güncellenemedi');
+        }
     }
-  }
 );
 
 // ... (dosyanın geri kalanı aynı)
@@ -157,6 +157,9 @@ const columnSlice = createSlice({
                 if (index !== -1) {
                     // Sadece 'title'ı güncelle, 'type' gibi diğer özellikleri koru
                     state.items[index].title = updatedColumn.title;
+                    if (updatedColumn.settings) {
+                        state.items[index].settings = updatedColumn.settings;
+                    }
                 }
             })
             // Sütun başarıyla silindiğinde

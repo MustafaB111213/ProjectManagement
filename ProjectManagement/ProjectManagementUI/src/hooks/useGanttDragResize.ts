@@ -1,26 +1,19 @@
 // src/hooks/useGanttDragResize.ts
-// (Dosyanın tamamını bununla değiştir)
 
 import { useState, useCallback, useEffect, type RefObject } from 'react';
-import { type Item, type Column } from '../types';
-// YENİ: ProcessedItemData'yı import et (içindeki yeni alanı okumak için)
+import { type Item, type Column, DependencyAction, type ColumnSettings, ColumnType } from '../types';
 import { type ProcessedItemData } from '../components/gantt/GanttArrows';
 import { useAppDispatch } from '../store/hooks';
-import { updateItemValue } from '../store/features/itemSlice';
-import { checkDependencyViolations, type UpdatedTaskData, type Violation } from '../utils/ganttDependencies';
+import { updateItemValue, updateMultipleItemValues } from '../store/features/itemSlice';
+import { calculateCascadingChanges, checkDependencyViolations, type UpdatedTaskData, type Violation } from '../utils/ganttDependencies';
 import { parseISO, differenceInCalendarDays, addDays, format, max as maxDate, min as minDate } from 'date-fns';
 
 type ResizeSide = 'start' | 'end';
 
 interface DragResizeState {
     item: Item;
-    timelineColumnId: number; // HANGİ kolonun sürüklendiğini tutar
-
-    // --- YENİ ALAN ---
-    // Bağımlılığın bağlı olduğu ana kolonun ID'si
+    timelineColumnId: number;
     primaryTimelineColumnId: number | null;
-    // --- YENİ ALAN SONU ---
-
     originalStartDate: Date;
     originalEndDate: Date;
     originalMouseX: number;
@@ -58,7 +51,6 @@ export const useGanttDragResize = ({
     const dragThreshold = 5;
 
     const getDatesFromItem = (item: Item, timelineColumnId: number): { startDate: Date, endDate: Date } | null => {
-        // ... (Bu fonksiyon aynı) ...
         const value = item.itemValues.find(v => v.columnId === timelineColumnId)?.value;
         if (!value) return null;
         try {
@@ -72,12 +64,9 @@ export const useGanttDragResize = ({
         }
     };
 
-    // --- MOUSE DOWN HANDLER'LARI ---
-
-    // GÜNCELLENDİ: 'itemData'dan 'primaryTimelineColumnId'yi alır
     const handleMouseDownOnBar = useCallback((
         event: React.MouseEvent,
-        itemData: ProcessedItemData, // <-- Tipi ProcessedItemData
+        itemData: ProcessedItemData,
         timelineColumnId: number
     ) => {
         if (event.button !== 0 || (event.target as HTMLElement).dataset.resizeHandle) return;
@@ -93,10 +82,7 @@ export const useGanttDragResize = ({
         setDragState({
             item: item,
             timelineColumnId: timelineColumnId,
-            // --- YENİ SATIR ---
-            // itemData'dan (GanttRightPanel'de eklediğimiz) ana barın ID'sini al
             primaryTimelineColumnId: itemData.primaryTimelineColumnId,
-            // --- YENİ SATIR SONU ---
             originalStartDate: dates.startDate,
             originalEndDate: dates.endDate,
             originalMouseX: event.clientX,
@@ -107,10 +93,9 @@ export const useGanttDragResize = ({
 
     }, [items, onDragStart]);
 
-    // GÜNCELLENDİ: 'itemData'dan 'primaryTimelineColumnId'yi alır
     const handleMouseDownOnResizeHandle = useCallback((
         event: React.MouseEvent,
-        itemData: ProcessedItemData, // <-- Tipi ProcessedItemData
+        itemData: ProcessedItemData,
         side: ResizeSide,
         timelineColumnId: number
     ) => {
@@ -128,9 +113,7 @@ export const useGanttDragResize = ({
         setDragState({
             item: item,
             timelineColumnId: timelineColumnId,
-            // --- YENİ SATIR ---
             primaryTimelineColumnId: itemData.primaryTimelineColumnId,
-            // --- YENİ SATIR SONU ---
             originalStartDate: dates.startDate,
             originalEndDate: dates.endDate,
             originalMouseX: event.clientX,
@@ -139,9 +122,6 @@ export const useGanttDragResize = ({
             isClickEvent: false,
         });
     }, [items, onDragStart]);
-
-
-    // --- MOUSE MOVE/UP/LEAVE HANDLER'LARI ---
 
     const handlePaneMouseMove = useCallback((event: MouseEvent) => {
         if (!dragState) return;
@@ -170,8 +150,6 @@ export const useGanttDragResize = ({
         });
     }, [dragState, dayWidthPx, dragThreshold]);
 
-
-    // DÜZELTME: Fonksiyon adı 'handlePaneMouseUp' olarak değiştirildi
     const handlePaneMouseUp = useCallback((event: MouseEvent) => {
         if (!dragState) return;
 
@@ -188,18 +166,18 @@ export const useGanttDragResize = ({
             if (deltaDays === 0) {
                 needsUpdate = false;
             }
-            else if (dragState.side === null) { // Sürükleme
+            else if (dragState.side === null) {
                 const duration = differenceInCalendarDays(dragState.originalEndDate, dragState.originalStartDate);
                 newStartDate = addDays(dragState.originalStartDate, deltaDays);
                 newEndDate = addDays(newStartDate, Math.max(0, duration));
                 needsUpdate = true;
             }
-            else if (dragState.side === 'start') { // Boyutlandırma (Başlangıç)
+            else if (dragState.side === 'start') {
                 newStartDate = minDate([addDays(dragState.originalStartDate, deltaDays), dragState.originalEndDate]);
                 newEndDate = dragState.originalEndDate;
                 needsUpdate = true;
             }
-            else if (dragState.side === 'end') { // Boyutlandırma (Bitiş)
+            else if (dragState.side === 'end') {
                 newStartDate = dragState.originalStartDate;
                 newEndDate = maxDate([addDays(dragState.originalEndDate, deltaDays), dragState.originalStartDate]);
                 needsUpdate = true;
@@ -208,31 +186,65 @@ export const useGanttDragResize = ({
 
         if (needsUpdate && newStartDate && newEndDate) {
 
-            let violation: Violation | null = null;
+            const dependencyColumn = columns.find(c => c.type === ColumnType.Dependency);
+            let currentMode = DependencyAction.Ignore;
 
-            // --- İSTEĞİNİN ÇÖZÜMÜ BURADA ---
-            // Sadece sürüklenen/boyutlanan bar, bağımlılıkların bağlı olduğu
-            // ANA bar ise kural ihlali kontrolü yap.
-            if (dragState.timelineColumnId === dragState.primaryTimelineColumnId) {
-                const updatedTask: UpdatedTaskData = { itemId: dragState.item.id, newStartDate, newEndDate };
-                violation = checkDependencyViolations(updatedTask, items, columns);
+            // Types.ts düzeltildiği için artık hata vermeyecek
+            if (dependencyColumn && dependencyColumn.settings) {
+                try {
+                    const settings: ColumnSettings = JSON.parse(dependencyColumn.settings);
+                    if (settings.dependencyAction) {
+                        currentMode = settings.dependencyAction;
+                    }
+                } catch (e) { }
             }
-            // (Eğer 'timelineColumnId' eşit değilse, 'violation' 'null' kalır
-            // ve kopya barın ihlal kontrolü atlanmış olur.)
-            // --- ÇÖZÜM SONU ---
+
+            let violation: Violation | null = null;
+            let cascadingUpdates: UpdatedTaskData[] = [];
+
+            if (dragState.timelineColumnId === dragState.primaryTimelineColumnId) {
+                
+                const updatedTask: UpdatedTaskData = { itemId: dragState.item.id, newStartDate, newEndDate };
+
+                if (currentMode === DependencyAction.Restrict) {
+                    violation = checkDependencyViolations(updatedTask, items, columns);
+                }
+                else if (currentMode === DependencyAction.AutoMove) {
+                    cascadingUpdates.push(updatedTask);
+                    const automaticChanges = calculateCascadingChanges(
+                        dragState.item.id, 
+                        newStartDate, 
+                        newEndDate, 
+                        items, 
+                        columns
+                    );
+                    cascadingUpdates = [...cascadingUpdates, ...automaticChanges];
+                }
+            }
 
             if (violation) {
-                alert(`BAĞIMLILIK İHLALİ:\n\n${violation.message}`);
+                alert(`BAĞIMLILIK İHLALİ (Kısıtlayıcı Mod):\n\n${violation.message}`);
                 needsUpdate = false;
             }
             else {
-                // Kural ihlali yoksa VEYA bu bir kopya bar ise, güncelle
-                const finalValue = `${format(newStartDate, 'yyyy-MM-dd')}/${format(newEndDate, 'yyyy-MM-dd')}`;
-                dispatch(updateItemValue({
-                    itemId: dragState.item.id,
-                    columnId: dragState.timelineColumnId, // Hangi bar sürüklendiyse onu günceller
-                    value: finalValue
-                }));
+                const formatDateVal = (s: Date, e: Date) => `${format(s, 'yyyy-MM-dd')}/${format(e, 'yyyy-MM-dd')}`;
+
+                if (currentMode === DependencyAction.AutoMove && cascadingUpdates.length > 0) {
+                    const bulkPayload = cascadingUpdates.map(u => ({
+                        itemId: u.itemId,
+                        columnId: dragState.timelineColumnId,
+                        value: formatDateVal(u.newStartDate, u.newEndDate)
+                    }));
+                    dispatch(updateMultipleItemValues({ updates: bulkPayload }));
+                } 
+                else {
+                    const finalValue = formatDateVal(newStartDate, newEndDate);
+                    dispatch(updateItemValue({
+                        itemId: dragState.item.id,
+                        columnId: dragState.timelineColumnId,
+                        value: finalValue
+                    }));
+                }
             }
         }
 
@@ -240,15 +252,13 @@ export const useGanttDragResize = ({
         onDragEnd();
 
     }, [dragState, dayWidthPx, dispatch, items, columns, onItemClick, onDragEnd]);
-    // DÜZELTME: handlePaneMouseUp'ı çağırır
+
     const handlePaneMouseLeave = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
         if (dragState) {
             handlePaneMouseUp(event.nativeEvent);
         }
     }, [dragState, handlePaneMouseUp]);
 
-    // --- useEffect (Global Dinleyiciler) ---
-    // DÜZELTME: Bağımlılıkları 'handlePane...' olarak günceller
     useEffect(() => {
         if (dragState) {
             let cursor = 'grabbing';
@@ -275,12 +285,8 @@ export const useGanttDragResize = ({
         isResizing,
         draggedItemData: isDragging ? dragState : null,
         resizedItemData: isResizing ? dragState : null,
-
         handleMouseDownOnBar,
         handleMouseDownOnResizeHandle,
-
-        // DÜZELTME: Artık 'return' bloğu, tanımlanan fonksiyonlarla eşleşiyor
         handlePaneMouseLeave,
-
     };
 };

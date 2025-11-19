@@ -15,6 +15,7 @@ namespace ProjectManagement.Application.DTOs.Column
         public ColumnType Type { get; set; }
         public int BoardId { get; set; }
         public int Order { get; set; }
+        public string? Settings { get; set; }
 
     }
 }

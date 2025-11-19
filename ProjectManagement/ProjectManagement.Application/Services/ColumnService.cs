@@ -112,6 +112,12 @@ namespace ProjectManagement.Application.Services
 
             _mapper.Map(updateColumnDto, column);
 
+            // Eğer frontend'den bir ayar geldiyse veritabanına yaz
+            if (updateColumnDto.Settings != null)
+            {
+                column.Settings = updateColumnDto.Settings;
+            }
+
             // _columnRepository.Update(column); // Zaten izlendiği için buna gerek yok
             await _columnRepository.SaveChangesAsync(); // Değişiklikleri kaydet
             return true;

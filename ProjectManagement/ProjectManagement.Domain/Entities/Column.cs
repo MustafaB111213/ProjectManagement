@@ -21,5 +21,7 @@ namespace ProjectManagement.Domain.Entities
         // Amaç: Bu sütun tanımının hangi panoya ait olduğunu belirten Foreign Key.
         public int BoardId { get; set; }
         public Board Board { get; set; }
+        // Bu alan veritabanında JSON formatında ayarları tutacak (Serbest, Zincirleme vs.)
+        public string? Settings { get; set; }
     }
 }

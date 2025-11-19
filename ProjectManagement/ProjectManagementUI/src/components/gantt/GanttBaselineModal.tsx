@@ -1,5 +1,3 @@
-// src/components/gantt/GanttBaselineModal.tsx
-
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppSelector } from '../../store/hooks';
 import Modal from '../common/Modal';
@@ -30,15 +28,22 @@ interface GanttBaselineModalProps {
     labelById: number | null;
     onLabelByChange: (labelId: number | null) => void;
 
-    // YENİ PROPLAR: Baseline için
     activeBaselineId: number | null;
     onBaselineChange: (columnId: number | null) => void;
     onCreateBaseline: () => void;
 
     groups: Group[];
     items: Item[];
-    initialZoomIndex: number;
-    onDeleteBaseline?: (columnId: number) => void; // (Opsiyonel olabilir ama View'dan gelecek)
+    
+    zoomIndex: number; 
+    onZoomIndexChange: (index: number) => void;
+    
+    collapsedGroupIds: Set<number>;
+    onToggleGroup: (groupId: number) => void;
+
+    initialDate?: Date;
+
+    onDeleteBaseline?: (columnId: number) => void; 
 }
 
 const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
@@ -56,16 +61,17 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
     items,
     labelById,
     onLabelByChange,
-    // YENİ: Destructure
     activeBaselineId,
     onBaselineChange,
     onCreateBaseline,
-    initialZoomIndex,
+    zoomIndex,
+    onZoomIndexChange,
+    collapsedGroupIds,
+    onToggleGroup,
+    initialDate,
     onDeleteBaseline, 
 }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(true);
-    const [zoomIndex, setZoomIndex] = useState(initialZoomIndex);
-    const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(new Set());
     const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
@@ -74,6 +80,16 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
 
     const modalRightPanelScrollRef = useRef<HTMLDivElement>(null);
     const modalLeftPanelInnerRef = useRef<HTMLDivElement>(null);
+
+    // Modal ilk açıldığında scroll yapılıp yapılmadığını takip et
+    const hasInitialScrolled = useRef(false);
+
+    // Modal kapandığında bu ref'i sıfırla
+    useEffect(() => {
+        if (!isOpen) {
+            hasInitialScrolled.current = false;
+        }
+    }, [isOpen]);
 
     const projectDateRange = useMemo(() => {
         const primaryTimelineId = activeTimelineIds.length > 0 ? activeTimelineIds[0] : null;
@@ -107,8 +123,8 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
         handleAutoFit
     } = useGanttTimeline({
         projectDateRange,
-        zoomIndex,
-        onZoomIndexChange: setZoomIndex,
+        zoomIndex, 
+        onZoomIndexChange, 
         rightPanelScrollRef: modalRightPanelScrollRef
     });
 
@@ -122,23 +138,21 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
         modalRightPanelScrollRef
     );
 
+    // --- MODAL AÇILIŞI (Senkronizasyon) ---
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !hasInitialScrolled.current) {
+            const targetDate = initialDate || new Date();
+            
+            // Modal animasyonu bitip DOM oturunca tek bir sefer scroll yap
             const timer = setTimeout(() => {
-                scrollToDate(new Date(), 'auto');
+                // 'auto' kullanıyoruz ki modal açılır açılmaz kullanıcı animasyon görmesin
+                scrollToDate(targetDate, 'center', 'auto');
+                hasInitialScrolled.current = true;
             }, 100);
+            
             return () => clearTimeout(timer);
         }
-    }, [isOpen, scrollToDate]);
-
-    const handleToggleGroup = useCallback((groupId: number) => {
-        setCollapsedGroupIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(groupId)) newSet.delete(groupId);
-            else newSet.add(groupId);
-            return newSet;
-        });
-    }, []);
+    }, [isOpen, scrollToDate, initialDate]);
 
     const handleToggleLeftPanel = useCallback(() => {
         setIsLeftPanelOpen(prev => !prev);
@@ -163,7 +177,6 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
             disableContentScroll={true}
         >
             <div className="flex flex-col h-[calc(100vh-6rem)] w-full bg-white">
-
                 <div className="flex-shrink-0 pt-6 pb-0 px-4">
                     <GanttToolbar
                         scrollToDate={scrollToDate}
@@ -181,7 +194,6 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
 
                 <div className="flex-1 flex w-full relative overflow-hidden">
                     <div className={`flex-1 h-full flex w-full relative transition-all duration-300 ${isSettingsOpen ? 'max-w-[calc(100%-400px)]' : 'max-w-full'}`}>
-
                         <div className={`flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isLeftPanelOpen ? 'w-[420px]' : 'w-0'} relative`}>
                             <div
                                 className="w-[426px] h-full overflow-y-hidden overflow-x-hidden border-r"
@@ -192,7 +204,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                     groups={groups}
                                     items={items}
                                     collapsedGroupIds={collapsedGroupIds}
-                                    onToggleGroup={handleToggleGroup}
+                                    onToggleGroup={onToggleGroup}
                                     hoveredItemId={hoveredItemId}
                                     columns={allColumns}
                                     activeTimelineIds={activeTimelineIds}
@@ -226,7 +238,6 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                 dayWidthPx={currentDayWidth}
                                 colorByColumnId={colorByColumnId}
                                 labelById={labelById}
-                                // YENİ: Prop geçirildi
                                 activeBaselineId={activeBaselineId}
                                 scrollContainerRef={modalRightPanelScrollRef}
                                 onItemClick={() => { }}
@@ -249,7 +260,6 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                 onColorByColumnChange={onColorByColumnChange}
                                 labelById={labelById}
                                 onLabelByChange={onLabelByChange}
-                                // YENİ: Prop'lar geçirildi
                                 activeBaselineId={activeBaselineId}
                                 onBaselineChange={onBaselineChange}
                                 onCreateBaseline={onCreateBaseline}

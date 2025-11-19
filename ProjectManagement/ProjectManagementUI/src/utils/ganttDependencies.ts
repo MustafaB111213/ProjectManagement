@@ -1,183 +1,330 @@
 // src/utils/ganttDependencies.ts (HATALARI GİDERİLMİŞ VERSİYON)
 
-import { differenceInDays, parseISO, isValid } from 'date-fns';
+import { differenceInDays, parseISO, isValid, addDays, differenceInCalendarDays } from 'date-fns';
 // types.ts dosyanızın yoluna göre '..' sayısını ayarlamanız gerekebilir
-import { type Item, type DependencyLink, type DependencyType, type Column, ColumnType } from '../types'; 
+import { type Item, type DependencyLink, type DependencyType, type Column, ColumnType } from '../types';
 
 // --- Yardımcı Tipler (Aynı) ---
 export interface UpdatedTaskData {
-    itemId: number;
-    newStartDate: Date;
-    newEndDate: Date;
+    itemId: number;
+    newStartDate: Date;
+    newEndDate: Date;
 }
 
 export interface Violation {
-    type: 'FS' | 'SS' | 'FF' | 'SF';
-    predecessorName: string; 
-    successorName: string;   
-    violationDays: number;   
-    message: string;
+    type: 'FS' | 'SS' | 'FF' | 'SF';
+    predecessorName: string;
+    successorName: string;
+    violationDays: number;
+    message: string;
 }
 
 // --- Ana Kontrol Fonksiyonu ---
 
 export const checkDependencyViolations = (
-    updatedTask: UpdatedTaskData,
-    allItems: Item[],
-    allColumns: Column[]
+    updatedTask: UpdatedTaskData,
+    allItems: Item[],
+    allColumns: Column[]
 ): Violation | null => {
-    
-    const timelineColumnId = allColumns.find(c => c.type === ColumnType.Timeline)?.id;
-    const dependencyColumnId = allColumns.find(c => c.type === ColumnType.Dependency)?.id;
-    
-    if (!dependencyColumnId || !timelineColumnId) {
-        return null; 
-    }
-    
-    const itemMap = new Map(allItems.map(item => [item.id, item]));
-    const movedItem = itemMap.get(updatedTask.itemId);
-    if (!movedItem) return null;
 
-    const newStart = updatedTask.newStartDate;
-    const newEnd = updatedTask.newEndDate;
+    const timelineColumnId = allColumns.find(c => c.type === ColumnType.Timeline)?.id;
+    const dependencyColumnId = allColumns.find(c => c.type === ColumnType.Dependency)?.id;
 
-    // =================================================================
-    // 1. ÖNCÜLLERİ KONTROL ET (Taşınan Görev = Ardıl/Successor)
-    // =================================================================
+    if (!dependencyColumnId || !timelineColumnId) {
+        return null;
+    }
 
-    const movedItemDependencies = movedItem.itemValues.find(iv => iv.columnId === dependencyColumnId)?.value;
-    if (movedItemDependencies) {
-        let dependencies: DependencyLink[];
-        try { dependencies = JSON.parse(movedItemDependencies); } catch { dependencies = []; }
+    const itemMap = new Map(allItems.map(item => [item.id, item]));
+    const movedItem = itemMap.get(updatedTask.itemId);
+    if (!movedItem) return null;
 
-        for (const link of dependencies) {
-            const predecessor = itemMap.get(link.id);
-            if (!predecessor) continue;
-            
-            const timelineValue = predecessor.itemValues.find(v => v.columnId === timelineColumnId)?.value;
-            if (!timelineValue) continue;
+    const newStart = updatedTask.newStartDate;
+    const newEnd = updatedTask.newEndDate;
 
-            const [predStartStr, predEndStr] = timelineValue.split('/');
-            const predStart = parseISO(predStartStr);
-            const predEnd = parseISO(predEndStr);
-            
-            if (!isValid(predStart) || !isValid(predEnd)) continue;
+    // =================================================================
+    // 1. ÖNCÜLLERİ KONTROL ET (Taşınan Görev = Ardıl/Successor)
+    // =================================================================
 
-            let violationDays = 0;
-            let violationType: 'FS' | 'SS' | 'FF' | 'SF' = link.type;
+    const movedItemDependencies = movedItem.itemValues.find(iv => iv.columnId === dependencyColumnId)?.value;
+    if (movedItemDependencies) {
+        let dependencies: DependencyLink[];
+        try { dependencies = JSON.parse(movedItemDependencies); } catch { dependencies = []; }
 
-            switch (link.type) {
-                case 'FS': // Öncül Bitmeli (predEnd), Ardıl Başlamalı (newStart)
-                    // Kural: predEnd < newStart
-                    if (predEnd >= newStart) {
-                        violationDays = differenceInDays(predEnd, newStart) + 1; 
-                    }
-                    break;
-               case 'SS': // Öncül Başlamalı (predStart), Ardıl Başlamalı (newStart)
-                    // Kural: predStart <= newStart
-                    if (predStart > newStart) {
-                        violationDays = differenceInDays(predStart, newStart); 
-                    }
-                    break;
-                case 'FF': // Öncül Bitmeli (predEnd), Ardıl Bitmeli (newEnd)
-                    // Kural: predEnd <= newEnd
-                    if (predEnd > newEnd) {
-                        violationDays = differenceInDays(predEnd, newEnd);
-                    }
-                    break;
-                case 'SF': // Öncül Başlamalı (predStart), Ardıl Bitmeli (newEnd)
-                    // Kural: predStart <= newEnd
-                    if (predStart > newEnd) {
-                        violationDays = differenceInDays(predStart, newEnd);
-                    }
-                    break;
-            }
+        for (const link of dependencies) {
+            const predecessor = itemMap.get(link.id);
+            if (!predecessor) continue;
 
-            if (violationDays > 0) {
-                // İhlal mesajı: Ardıl (movedItem), Öncül kuralını ihlal ediyor.
-                return {
-                    type: violationType,
-                    predecessorName: predecessor.name,
-                    successorName: movedItem.name,
-                    violationDays: violationDays,
-                    message: `Bu hareket, görevinizin ("${movedItem.name}") bağımlı olduğu öncül görev "${predecessor.name}" (${violationType} kuralı) ile çakışıyor ve ${violationDays} gün ihlal yaratıyor.`
-                };
-            }
-        }
-    }
+            const timelineValue = predecessor.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+            if (!timelineValue) continue;
 
+            const [predStartStr, predEndStr] = timelineValue.split('/');
+            const predStart = parseISO(predStartStr);
+            const predEnd = parseISO(predEndStr);
 
-    // =================================================================
-    // 2. ARDILLARI KONTROL ET (Taşınan Görev = Öncül/Predecessor)
-    // =================================================================
+            if (!isValid(predStart) || !isValid(predEnd)) continue;
 
-    for (const successor of allItems) {
-        if (successor.id === updatedTask.itemId) continue; 
-        
-        const links = successor.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
-        if (!links) continue;
+            let violationDays = 0;
+            let violationType: 'FS' | 'SS' | 'FF' | 'SF' = link.type;
 
-        let dependencies: DependencyLink[];
-        try { dependencies = JSON.parse(links); } catch { continue; }
+            switch (link.type) {
+                case 'FS': // Öncül Bitmeli (predEnd), Ardıl Başlamalı (newStart)
+                    // Kural: predEnd < newStart
+                    if (predEnd >= newStart) {
+                        violationDays = differenceInDays(predEnd, newStart) + 1;
+                    }
+                    break;
+                case 'SS': // Öncül Başlamalı (predStart), Ardıl Başlamalı (newStart)
+                    // Kural: predStart <= newStart
+                    if (predStart > newStart) {
+                        violationDays = differenceInDays(predStart, newStart);
+                    }
+                    break;
+                case 'FF': // Öncül Bitmeli (predEnd), Ardıl Bitmeli (newEnd)
+                    // Kural: predEnd <= newEnd
+                    if (predEnd > newEnd) {
+                        violationDays = differenceInDays(predEnd, newEnd);
+                    }
+                    break;
+                case 'SF': // Öncül Başlamalı (predStart), Ardıl Bitmeli (newEnd)
+                    // Kural: predStart <= newEnd
+                    if (predStart > newEnd) {
+                        violationDays = differenceInDays(predStart, newEnd);
+                    }
+                    break;
+            }
 
-        for (const link of dependencies) {
-            // Sadece 'movedItem'ın ÖNCÜL olduğu bağımlılıkları kontrol et
-            if (link.id !== updatedTask.itemId) continue; 
-
-            // Ardılın (successor) tarihlerini al
-            const timelineValue = successor.itemValues.find(v => v.columnId === timelineColumnId)?.value;
-            if (!timelineValue) continue;
-            
-            const [succStartStr, succEndStr] = timelineValue.split('/');
-            const succStart = parseISO(succStartStr);
-            const succEnd = parseISO(succEndStr);
-
-            if (!isValid(succStart) || !isValid(succEnd)) continue;
-
-            let violationDays = 0;
-            let violationType: 'FS' | 'SS' | 'FF' | 'SF' = link.type;
-
-            switch (link.type) {
-                case 'FS': // Öncül Bitmeli (newEnd), Ardıl Başlamalı (succStart)
-                    // Kural: newEnd < succStart
-                    if (newEnd >= succStart) {
-                        violationDays = differenceInDays(newEnd, succStart) + 1;
-                    }
-                    break;
-                case 'SS': // Öncül Başlamalı (newStart), Ardıl Başlamalı (succStart)
-                    // Kural: newStart <= succStart
-                   if (newStart > succStart) {
-                        violationDays = differenceInDays(newStart, succStart);
-                    }
-                    break;
-                case 'FF': // Öncül Bitmeli (newEnd), Ardıl Bitmeli (succEnd)
-                    // Kural: newEnd <= succEnd
-                    if (newEnd > succEnd) {
-                        violationDays = differenceInDays(newEnd, succEnd);
-                    } 
-                    // --- HATA BURADAYDI: _ }} YERİNE SADECE } OLMALI ---
-                    break;
-                case 'SF': // Öncül Başlamalı (newStart), Ardıl Bitmeli (succEnd)
-                   // Kural: newStart <= succEnd
-                    if (newStart > succEnd) {
-                        violationDays = differenceInDays(newStart, succEnd);
-                    }
-                    break;
-            }
-
-            if (violationDays > 0) {
-                // İhlal mesajı: Öncül (movedItem), Ardılın kuralını bozuyor.
-                return {
-                    type: violationType,
-                    predecessorName: movedItem.name,
-                    successorName: successor.name,
-                    violationDays: violationDays,
-                    message: `Bu görev ("${movedItem.name}") taşınamaz. Bu hareket, ardıl görev "${successor.name}" için ${violationType} kuralını ${violationDays} gün ihlal etmeye zorlar.`
-                };
-            }
-        }
-    }
+            if (violationDays > 0) {
+                // İhlal mesajı: Ardıl (movedItem), Öncül kuralını ihlal ediyor.
+                return {
+                    type: violationType,
+                    predecessorName: predecessor.name,
+                    successorName: movedItem.name,
+                    violationDays: violationDays,
+                    message: `Bu hareket, görevinizin ("${movedItem.name}") bağımlı olduğu öncül görev "${predecessor.name}" (${violationType} kuralı) ile çakışıyor ve ${violationDays} gün ihlal yaratıyor.`
+                };
+            }
+        }
+    }
 
 
-    return null; // İhlal yok
+    // =================================================================
+    // 2. ARDILLARI KONTROL ET (Taşınan Görev = Öncül/Predecessor)
+    // =================================================================
+
+    for (const successor of allItems) {
+        if (successor.id === updatedTask.itemId) continue;
+
+        const links = successor.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
+        if (!links) continue;
+
+        let dependencies: DependencyLink[];
+        try { dependencies = JSON.parse(links); } catch { continue; }
+
+        for (const link of dependencies) {
+            // Sadece 'movedItem'ın ÖNCÜL olduğu bağımlılıkları kontrol et
+            if (link.id !== updatedTask.itemId) continue;
+
+            // Ardılın (successor) tarihlerini al
+            const timelineValue = successor.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+            if (!timelineValue) continue;
+
+            const [succStartStr, succEndStr] = timelineValue.split('/');
+            const succStart = parseISO(succStartStr);
+            const succEnd = parseISO(succEndStr);
+
+            if (!isValid(succStart) || !isValid(succEnd)) continue;
+
+            let violationDays = 0;
+            let violationType: 'FS' | 'SS' | 'FF' | 'SF' = link.type;
+
+            switch (link.type) {
+                case 'FS': // Öncül Bitmeli (newEnd), Ardıl Başlamalı (succStart)
+                    // Kural: newEnd < succStart
+                    if (newEnd >= succStart) {
+                        violationDays = differenceInDays(newEnd, succStart) + 1;
+                    }
+                    break;
+                case 'SS': // Öncül Başlamalı (newStart), Ardıl Başlamalı (succStart)
+                    // Kural: newStart <= succStart
+                    if (newStart > succStart) {
+                        violationDays = differenceInDays(newStart, succStart);
+                    }
+                    break;
+                case 'FF': // Öncül Bitmeli (newEnd), Ardıl Bitmeli (succEnd)
+                    // Kural: newEnd <= succEnd
+                    if (newEnd > succEnd) {
+                        violationDays = differenceInDays(newEnd, succEnd);
+                    }
+                    // --- HATA BURADAYDI: _ }} YERİNE SADECE } OLMALI ---
+                    break;
+                case 'SF': // Öncül Başlamalı (newStart), Ardıl Bitmeli (succEnd)
+                    // Kural: newStart <= succEnd
+                    if (newStart > succEnd) {
+                        violationDays = differenceInDays(newStart, succEnd);
+                    }
+                    break;
+            }
+
+            if (violationDays > 0) {
+                // İhlal mesajı: Öncül (movedItem), Ardılın kuralını bozuyor.
+                return {
+                    type: violationType,
+                    predecessorName: movedItem.name,
+                    successorName: successor.name,
+                    violationDays: violationDays,
+                    message: `Bu görev ("${movedItem.name}") taşınamaz. Bu hareket, ardıl görev "${successor.name}" için ${violationType} kuralını ${violationDays} gün ihlal etmeye zorlar.`
+                };
+            }
+        }
+    }
+
+
+    return null; // İhlal yok
+};
+
+/**
+ * Mod 3: Zincirleme Hareket (Auto Schedule - Göreceli Öteleme)
+ * Öncül görev ne kadar oynarsa (Delta), ardıl görev de mevcut boşluğunu koruyarak
+ * o kadar oynar.
+ */
+export const calculateCascadingChanges = (
+    rootItemId: number,
+    rootNewStart: Date,
+    rootNewEnd: Date,
+    allItems: Item[],
+    allColumns: Column[]
+): UpdatedTaskData[] => {
+    
+    const dependencyColumnId = allColumns.find(c => c.type === ColumnType.Dependency)?.id;
+    const timelineColumnId = allColumns.find(c => c.type === ColumnType.Timeline)?.id;
+
+    if (!dependencyColumnId || !timelineColumnId) return [];
+
+    const updates: UpdatedTaskData[] = [];
+    const processedItems = new Set<number>(); 
+    
+    // Kuyrukta hem yeni tarihleri hem de referans (eski) tarihleri tutuyoruz
+    // Böylece ne kadar oynadığını (delta) hesaplayabiliriz.
+    interface QueueItem {
+        id: number;
+        newStart: Date;
+        newEnd: Date;
+        oldStart: Date; // Delta hesabı için gerekli
+        oldEnd: Date;   // Delta hesabı için gerekli
+    }
+
+    // Root item'ın eski tarihlerini bul
+    const rootItem = allItems.find(i => i.id === rootItemId);
+    if (!rootItem) return [];
+    
+    const rootVal = rootItem.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+    if (!rootVal) return [];
+    const [rStartStr, rEndStr] = rootVal.split('/');
+    const rootOldStart = parseISO(rStartStr);
+    const rootOldEnd = parseISO(rEndStr);
+
+    const queue: QueueItem[] = [];
+
+    queue.push({ 
+        id: rootItemId, 
+        newStart: rootNewStart, 
+        newEnd: rootNewEnd,
+        oldStart: rootOldStart,
+        oldEnd: rootOldEnd
+    });
+    
+    processedItems.add(rootItemId);
+
+    while (queue.length > 0) {
+        const current = queue.shift()!;
+        
+        // Bu göreve bağlı ardılları bul
+        const successors = allItems.filter(item => {
+            if (item.id === current.id) return false;
+            const depVal = item.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
+            if (!depVal) return false;
+            try {
+                const links: DependencyLink[] = JSON.parse(depVal);
+                return links.some(link => link.id === current.id);
+            } catch { return false; }
+        });
+
+        for (const successor of successors) {
+            if (processedItems.has(successor.id)) continue;
+
+            // Ardılın MEVCUT (Eski) tarihlerini al
+            const timelineVal = successor.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+            if (!timelineVal) continue;
+            
+            const [succOldStartStr, succOldEndStr] = timelineVal.split('/');
+            const succOldStart = parseISO(succOldStartStr);
+            const succOldEnd = parseISO(succOldEndStr);
+            
+            const duration = differenceInCalendarDays(succOldEnd, succOldStart);
+
+            // Bağımlılık tipini bul
+            const depVal = successor.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
+            const links: DependencyLink[] = JSON.parse(depVal!);
+            const linkToCurrent = links.find(l => l.id === current.id);
+            
+            if (!linkToCurrent) continue;
+
+            let moveDelta = 0;
+
+            // --- DELTA MANTIĞI ---
+            // Öncülün HANGİ tarafı değiştiyse, o değişimi (farkı) ardıla yansıt.
+            // Bu sayede aradaki boşluk (Gap) ne ise o korunur.
+
+            switch (linkToCurrent.type) {
+                case 'FS': 
+                    // Öncül Bitiş -> Ardıl Başlangıç
+                    // Öncülün BİTİŞ tarihi ne kadar oynadı?
+                    moveDelta = differenceInCalendarDays(current.newEnd, current.oldEnd);
+                    break;
+
+                case 'SS': 
+                    // Öncül Başlangıç -> Ardıl Başlangıç
+                    // Öncülün BAŞLANGIÇ tarihi ne kadar oynadı?
+                    moveDelta = differenceInCalendarDays(current.newStart, current.oldStart);
+                    break;
+
+                case 'FF': 
+                    // Öncül Bitiş -> Ardıl Bitiş
+                    // Öncülün BİTİŞ tarihi ne kadar oynadı?
+                    moveDelta = differenceInCalendarDays(current.newEnd, current.oldEnd);
+                    break;
+
+                case 'SF': 
+                    // Öncül Başlangıç -> Ardıl Bitiş
+                    // Öncülün BAŞLANGIÇ tarihi ne kadar oynadı?
+                    moveDelta = differenceInCalendarDays(current.newStart, current.oldStart);
+                    break;
+            }
+
+            // Eğer bir hareket varsa (İleri veya Geri fark etmez)
+            if (moveDelta !== 0) {
+                const newSuccStart = addDays(succOldStart, moveDelta);
+                const newSuccEnd = addDays(newSuccStart, Math.abs(duration)); // Süreyi koru
+
+                updates.push({
+                    itemId: successor.id,
+                    newStartDate: newSuccStart,
+                    newEndDate: newSuccEnd
+                });
+
+                // Zincirleme devam etsin diye kuyruğa ekle
+                queue.push({ 
+                    id: successor.id, 
+                    newStart: newSuccStart, 
+                    newEnd: newSuccEnd,
+                    oldStart: succOldStart, // Bir sonraki adım için referans
+                    oldEnd: succOldEnd     // Bir sonraki adım için referans
+                });
+                
+                processedItems.add(successor.id);
+            }
+        }
+    }
+
+    return updates;
 };

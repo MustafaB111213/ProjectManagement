@@ -17,6 +17,9 @@ const initialState: ItemState = {
     error: null,
 };
 
+export interface BulkUpdateItemValueArgs {
+    updates: { itemId: number; columnId: number; value: string }[];
+}
 // --- SELECTORS ---
 
 const selectItemsByGroup = (state: RootState) => state.items.itemsByGroup;
@@ -31,6 +34,33 @@ export const selectAllItemsFlat = createSelector(
     [selectItemsByGroup],
     (itemsByGroup) => Object.values(itemsByGroup).flat()
 );
+
+export const updateMultipleItemValues = createAsyncThunk<
+    { itemId: number; columnId: number; value: string }[], // Return type
+    BulkUpdateItemValueArgs,
+    { rejectValue: string }
+>('items/updateMultipleItemValues', async ({ updates }, { rejectWithValue }) => {
+    try {
+        // Eğer backendinizde toplu güncelleme endpoint'i varsa onu kullanın (/items/bulk-update gibi).
+        // Yoksa, Promise.all ile paralel istek atıyoruz:
+        const promises = updates.map(u =>
+            fetch(`${API_BASE_URL}/items/${u.itemId}/values`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ columnId: u.columnId, value: u.value }),
+            }).then(res => {
+                if (!res.ok) throw new Error('Update failed');
+                return u;
+            })
+        );
+
+        const results = await Promise.all(promises);
+        return results;
+
+    } catch (err: any) {
+        return rejectWithValue(err.message || 'Toplu güncelleme başarısız');
+    }
+});
 
 // --- ASYNC THUNKS ---
 
@@ -365,8 +395,23 @@ const itemSlice = createSlice({
             .addCase(moveItem.rejected, (s, a) => {
                 s.error = a.payload || 'Item taşınamadı';
                 console.error("Item taşıma hatası (backend):", a.payload);
+            })
+            .addCase(updateMultipleItemValues.fulfilled, (state, action) => {
+                const updates = action.payload;
+                updates.forEach(u => {
+                    // Her bir güncellemeyi state'e uygula
+                    for (const groupId in state.itemsByGroup) {
+                        const item = state.itemsByGroup[groupId].find(i => i.id === u.itemId);
+                        if (item) {
+                            const idx = item.itemValues.findIndex(iv => iv.columnId === u.columnId);
+                            if (idx > -1) item.itemValues[idx].value = u.value;
+                            else item.itemValues.push({ id: 0, itemId: u.itemId, columnId: u.columnId, value: u.value }); // id 0 geçici
+                            break;
+                        }
+                    }
+                });
             });
-    },
+},
 });
 
 export const { clearItems, reorderItemsLocally: reorderItems } = itemSlice.actions;
