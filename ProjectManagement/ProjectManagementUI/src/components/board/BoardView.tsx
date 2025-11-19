@@ -98,12 +98,14 @@ const BoardView: React.FC = () => {
     // State
     const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(new Set());
     const [ganttZoomIndex, setGanttZoomIndex] = useState<number>(DEFAULT_ZOOM_INDEX);
+    // --- YARDIMCI DEĞİŞKEN ---
 
     // --- DND STATE ---
     const [activeId, setActiveId] = useState<string | null>(null);
     const [activeDragType, setActiveDragType] = useState<'GROUP' | 'ITEM' | 'COLUMN' | null>(null);
     const [activeDragData, setActiveDragData] = useState<any>(null); // Sürüklenen objenin verisi
-
+    // Şu an aktif olarak bir GRUP mu sürükleniyor?
+    const isDraggingGroup = activeDragType === 'GROUP';
     // --- SENSORS ---
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -149,7 +151,7 @@ const BoardView: React.FC = () => {
 
         if (!over || !selectedBoardId) return;
 
-        // 1. GRUP SIRALAMA
+        // 1. GRUP SIRALAMA (Değişiklik yok, aynen kalıyor)
         if (active.data.current?.type === 'GROUP') {
             if (active.id !== over.id) {
                 const oldIndex = groups.findIndex(g => `group-${g.id}` === active.id);
@@ -168,16 +170,30 @@ const BoardView: React.FC = () => {
 
         // 2. SÜTUN SIRALAMA
         if (active.data.current?.type === 'COLUMN') {
-            if (active.id !== over.id) {
-                const oldIndex = columns.findIndex(c => `column-${c.id}` === active.id);
-                const newIndex = columns.findIndex(c => `column-${c.id}` === over.id);
+            // ID string'ine bakmak yerine data objesindeki gerçek column ID'lerine bakıyoruz.
+            // GroupSection içinde data: { type: 'COLUMN', column: ... } vermiştik.
 
-                if (oldIndex !== -1 && newIndex !== -1) {
-                    const newColumns = arrayMove(columns, oldIndex, newIndex);
-                    dispatch(reorderColumnsLocally({ orderedColumns: newColumns }));
+            const activeColumnId = active.data.current.column.id;
 
-                    const orderedColumnIds = newColumns.map(c => c.id);
-                    dispatch(updateColumnOrder({ boardId: selectedBoardId, orderedColumnIds }));
+            // Over (üzerine gelinen) da bir sütun mu kontrol et
+            if (over.data.current?.type === 'COLUMN') {
+                const overColumnId = over.data.current.column.id;
+
+                if (activeColumnId !== overColumnId) {
+                    // Global 'columns' listesindeki indeksleri buluyoruz
+                    const oldIndex = columns.findIndex(c => c.id === activeColumnId);
+                    const newIndex = columns.findIndex(c => c.id === overColumnId);
+
+                    if (oldIndex !== -1 && newIndex !== -1) {
+                        const newColumns = arrayMove(columns, oldIndex, newIndex);
+
+                        // Redux Update (Tüm grupları etkiler)
+                        dispatch(reorderColumnsLocally({ orderedColumns: newColumns }));
+
+                        // Backend Update
+                        const orderedColumnIds = newColumns.map(c => c.id);
+                        dispatch(updateColumnOrder({ boardId: selectedBoardId, orderedColumnIds }));
+                    }
                 }
             }
         }
@@ -276,14 +292,14 @@ const BoardView: React.FC = () => {
     // --- RENDER ---
     return (
         <div className={`flex flex-col ${isGanttView ? 'h-full' : ''}`}> {/* p-4'ü buradan kaldırdım, aşağıya içerik kısmına ekleyebilirsin veya tasarım tercihine göre bırakabilirsin */}
-            
+
             {/* --- BİRLEŞİK HEADER BAŞLANGICI --- */}
             {/* 1. bg-white: Hepsinin arkası beyaz olsun.
                 2. shadow-sm veya border-b: Sadece en altta tek bir çizgi/gölge olsun.
                 3. z-30: İçeriğin üstünde kalsın.
             */}
             <div className="sticky top-0 z-30 bg-white ">
-                
+
                 {/* 1. BoardHeader: Padding'i biraz azalttık ve alt çizgiyi kaldırdık */}
                 <div className="px-6 pt-5 pb-2">
                     <BoardHeader />
@@ -305,8 +321,8 @@ const BoardView: React.FC = () => {
                 {activeViewType === 'table' && (
                     <>
                         {/* Tabs ile Actionbar arasına hafif bir ayırıcı çizgi (Opsiyonel) */}
-                        <div className="h-px bg-gray-200 mx-6"></div> 
-                        
+                        <div className="h-px bg-gray-200 mx-6"></div>
+
                         <div className="px-6 py-3">
                             <BoardActionbar />
                         </div>
@@ -347,7 +363,7 @@ const BoardView: React.FC = () => {
                                             <GroupSection
                                                 key={group.id}
                                                 group={group}
-                                                isCollapsed={collapsedGroupIds.has(group.id)}
+                                                isCollapsed={isDraggingGroup ? true : collapsedGroupIds.has(group.id)}
                                                 onToggleCollapse={() => handleToggleGroup(group.id)}
                                             />
                                         ))}
@@ -383,7 +399,8 @@ const BoardView: React.FC = () => {
                                             />
                                         </div>
                                     ) : activeDragType === 'COLUMN' ? (
-                                        <div className="bg-blue-500 text-white p-2 rounded shadow-lg opacity-90 text-xs uppercase font-bold w-[150px] flex justify-center items-center">
+                                        // Sürüklerken görünen hayalet kutu
+                                        <div className="bg-gray-100 border border-gray-300 text-gray-600 p-2 rounded shadow-xl opacity-90 text-xs uppercase font-bold w-[150px] h-10 flex items-center justify-center">
                                             {activeDragData.column.title}
                                         </div>
                                     ) : null

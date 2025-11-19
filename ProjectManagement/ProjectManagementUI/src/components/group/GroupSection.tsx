@@ -20,18 +20,26 @@ import EditColumnForm from '../column/EditColumnForm';
 import { FiPlus, FiEdit, FiTrash2, FiChevronRight, FiChevronDown, FiGrid } from 'react-icons/fi';
 import { useDroppable } from '@dnd-kit/core';
 
-// --- YENİ: Sürüklenebilir Sütun Başlığı Bileşeni ---
-const SortableColumnHeader = ({ column, openEdit, deleteCol }: { column: Column, openEdit: any, deleteCol: any }) => {
+// 1. SortableColumnHeader'a 'groupId' prop'u ekliyoruz
+const SortableColumnHeader = ({ column, groupId, openEdit, deleteCol }: { column: Column, groupId: number, openEdit: any, deleteCol: any }) => {
+
+    // 2. BENZERSİZ ID OLUŞTURMA: ID artık gruba özel
+    const uniqueId = `group-${groupId}-column-${column.id}`;
+
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-        id: `column-${column.id}`,
-        data: { type: 'COLUMN', column }
+        id: uniqueId,
+        data: {
+            type: 'COLUMN',
+            column, // Column verisini taşıyoruz
+            groupId // Hangi gruptan sürüklendiği bilgisi (gerekirse)
+        }
     });
 
     const style = {
         transform: CSS.Translate.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
-        width: '150px', // Sabit genişlik (Grid ile uyumlu olmalı)
+        width: '150px',
         zIndex: isDragging ? 999 : 'auto'
     };
 
@@ -51,7 +59,6 @@ const SortableColumnHeader = ({ column, openEdit, deleteCol }: { column: Column,
         </div>
     );
 };
-// ---------------------------------------------------
 
 
 interface GroupSectionProps {
@@ -106,7 +113,11 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
 
     // DND-KIT için ID listeleri
     const itemIds = useMemo(() => items.map(i => `item-${i.id}`), [items]);
-    const columnIds = useMemo(() => columns.map(c => `column-${c.id}`), [columns]);
+    // 3. Sütun ID listesini de benzersiz formata çeviriyoruz
+    // Bu liste SortableContext için gerekli
+    const columnIds = useMemo(() =>
+        columns.map(c => `group-${group.id}-column-${c.id}`),
+        [columns, group.id]);
 
     const gridTemplateColumns = useMemo(() =>
         `60px minmax(200px, 1fr) ${columns.map(() => '150px').join(' ')} 60px`, [columns]);
@@ -158,7 +169,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
                         <button onClick={onToggleCollapse} onMouseDown={e => e.stopPropagation()} className="p-1 text-gray-400 hover:text-gray-700">
                             {isCollapsed ? <FiChevronRight size={16} /> : <FiChevronDown size={16} />}
                         </button>
-                        
+
                         <h3 className="text-base font-semibold truncate cursor-pointer" style={{ color: group.color }} onClick={onToggleCollapse}>
                             {group.title}
                         </h3>
@@ -166,8 +177,8 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
                     </div>
 
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button onClick={(e) => { e.stopPropagation(); setEditModalOpen(true); }} className="p-1.5 text-gray-500 hover:text-blue-600"><FiEdit size={14} /></button>
-                         <button onClick={handleDeleteGroup} className="p-1.5 text-gray-500 hover:text-red-600"><FiTrash2 size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setEditModalOpen(true); }} className="p-1.5 text-gray-500 hover:text-blue-600"><FiEdit size={14} /></button>
+                        <button onClick={handleDeleteGroup} className="p-1.5 text-gray-500 hover:text-red-600"><FiTrash2 size={14} /></button>
                     </div>
                 </div>
 
@@ -176,26 +187,25 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
                     <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
                             <div className="min-w-max">
-                                
+
                                 {/* --- SÜTUN BAŞLIKLARI --- */}
                                 <div className="grid border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase text-gray-500 tracking-wider items-center" style={{ gridTemplateColumns }}>
-                                    {/* Sabitler */}
                                     <div className="sticky left-0 z-20 bg-gray-50 px-4 py-2 border-r border-gray-200 h-10 flex items-center"></div>
                                     <div className="sticky z-20 bg-gray-50 px-2 py-2 border-r border-gray-200 h-10 flex items-center" style={{ left: '60px' }}>Görev Adı</div>
-                                    
-                                    {/* Sürüklenebilir Sütunlar */}
+
+                                    {/* 4. Strategy ve Items burada güncellendi */}
                                     <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
                                         {columns.map((col) => (
-                                            <SortableColumnHeader 
-                                                key={col.id} 
-                                                column={col} 
-                                                openEdit={openEditColumnModal} 
-                                                deleteCol={handleDeleteColumn} 
+                                            <SortableColumnHeader
+                                                key={col.id}
+                                                column={col}
+                                                groupId={group.id} // <-- groupId'yi prop olarak geçiyoruz
+                                                openEdit={openEditColumnModal}
+                                                deleteCol={handleDeleteColumn}
                                             />
                                         ))}
                                     </SortableContext>
 
-                                    {/* Yeni Sütun Ekle */}
                                     <div className="flex justify-center items-center h-10">
                                         <button onClick={() => setColumnModalOpen(true)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200">
                                             <FiPlus size={16} />
@@ -222,7 +232,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
 
                                 {/* Yeni Görev Ekleme */}
                                 <div className="grid items-center border-t border-gray-200" style={{ gridTemplateColumns }}>
-                                     {/* (Tasarım aynı kalıyor, sadece form kodunu kopyaladım) */}
+                                    {/* (Tasarım aynı kalıyor, sadece form kodunu kopyaladım) */}
                                     <div className="sticky left-0 z-10 bg-white relative border-r border-gray-200 h-10">
                                         <div className="absolute top-0 left-0 bottom-0 w-1" style={{ backgroundColor: group.color }}></div>
                                         <div className="px-4 h-full flex items-center"><input type="checkbox" className="h-4 w-4 invisible" /></div>
@@ -244,9 +254,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
             {/* Modal Render'ları (Aynı kalıyor) */}
             {selectedBoardId && (
                 <>
-                   <Modal isOpen={isColumnModalOpen} onClose={() => setColumnModalOpen(false)} title="Yeni Sütun Ekle"><AddColumnForm boardId={selectedBoardId} onClose={() => setColumnModalOpen(false)} /></Modal>
-                   <Modal isOpen={isEditModalOpen} onClose={() => setEditModalOpen(false)} title="Grubu Düzenle"><EditGroupForm boardId={selectedBoardId} group={group} onClose={() => setEditModalOpen(false)} /></Modal>
-                   {editingColumn && <Modal isOpen={!!editingColumn} onClose={() => setEditingColumn(null)} title="Sütunu Düzenle"><EditColumnForm boardId={selectedBoardId} column={editingColumn} onClose={() => setEditingColumn(null)} /></Modal>}
+                    <Modal isOpen={isColumnModalOpen} onClose={() => setColumnModalOpen(false)} title="Yeni Sütun Ekle"><AddColumnForm boardId={selectedBoardId} onClose={() => setColumnModalOpen(false)} /></Modal>
+                    <Modal isOpen={isEditModalOpen} onClose={() => setEditModalOpen(false)} title="Grubu Düzenle"><EditGroupForm boardId={selectedBoardId} group={group} onClose={() => setEditModalOpen(false)} /></Modal>
+                    {editingColumn && <Modal isOpen={!!editingColumn} onClose={() => setEditingColumn(null)} title="Sütunu Düzenle"><EditColumnForm boardId={selectedBoardId} column={editingColumn} onClose={() => setEditingColumn(null)} /></Modal>}
                 </>
             )}
         </>
