@@ -131,6 +131,25 @@ const BoardView: React.FC = () => {
 
     // --- HANDLERS ---
 
+    const handleCreateView = (type: 'table' | 'gantt' | 'calendar') => {
+        if (!selectedBoardId) return;
+
+        // Tipine göre varsayılan bir isim belirleyelim
+        let defaultName = 'Yeni Görünüm';
+        if (type === 'table') defaultName = 'Tablo Görünümü';
+        if (type === 'gantt') defaultName = 'Zaman Çizelgesi';
+        if (type === 'calendar') defaultName = 'Takvim';
+
+        // Redux Action'ı tetikle
+        dispatch(createBoardView({
+            boardId: selectedBoardId,
+            payload: {
+                name: defaultName,
+                type: type // Backend'e 'table' veya 'gantt' stringi gidecek
+            }
+        }));
+    };
+
     const handleDragStart = (event: DragStartEvent) => {
         const { active } = event;
         setActiveId(active.id as string);
@@ -311,7 +330,7 @@ const BoardView: React.FC = () => {
                         views={boardViews.map(v => ({ id: v.id, name: v.name, type: v.type.toLowerCase() as any }))}
                         activeViewId={activeViewId}
                         onViewChange={(id) => dispatch(setActiveViewId(id as number))}
-                        onAddViewTypeSelected={(type) => { /* ... */ }}
+                        onAddViewTypeSelected={handleCreateView}
                         onDeleteView={(id) => dispatch(deleteBoardView({ boardId: selectedBoardId!, viewId: id }))}
                         onRenameView={(id, name) => dispatch(updateBoardView({ boardId: selectedBoardId!, viewId: id, payload: { name } }))}
                     />
