@@ -49,17 +49,49 @@ namespace ProjectManagement.Application.Services
             }
 
             var groupEntity = _mapper.Map<Group>(createGroupDto);
-            groupEntity.BoardId = boardId; // BoardId'yi URL'den gelen parametre ile set ediyoruz.
+            groupEntity.BoardId = boardId;
 
-            int maxOrder = await _groupRepository.GetMaxOrderAsync(boardId);
-            groupEntity.Order = maxOrder + 1;
+            // --- YENİ MANTIK ---
 
-            await _groupRepository.AddAsync(groupEntity);
-            await _groupRepository.SaveChangesAsync();
+            if (createGroupDto.Position == "top")
+            {
+                // 1. Bu panoya ait tüm mevcut grupları çek
+                // ÖNEMLİ: _context üzerinden çekiyoruz ki değişiklikleri takip edebilelim.
+                var existingGroups = await _context.Groups
+                    .Where(g => g.BoardId == boardId)
+                    .ToListAsync();
+
+                // 2. Hepsini 1 basamak aşağı kaydır
+                foreach (var group in existingGroups)
+                {
+                    group.Order += 1;
+                }
+
+                // 3. Yeni grubu en başa koy
+                groupEntity.Order = 0;
+            }
+            else
+            {
+                // Varsayılan (Bottom)
+                var maxOrder = await _context.Groups
+                    .Where(g => g.BoardId == boardId)
+                    .MaxAsync(g => (double?)g.Order) ?? -1;
+
+                groupEntity.Order = (int)maxOrder + 1;
+            }
+
+            // --- KAYDETME İŞLEMİ (KRİTİK DEĞİŞİKLİK) ---
+
+            // Yeni grubu context'e ekle
+            await _context.Groups.AddAsync(groupEntity);
+
+            // ÖNEMLİ: _groupRepository.SaveChangesAsync() YERİNE _context.SaveChangesAsync() kullan.
+            // Çünkü yukarıdaki 'existingGroups' listesini _context üzerinden çektik ve değiştirdik.
+            // Bu değişikliklerin (Order += 1) veritabanına yansıması için context'in save edilmesi gerekir.
+            await _context.SaveChangesAsync();
 
             return _mapper.Map<GroupDto>(groupEntity);
         }
-
         public async Task<GroupDto> GetGroupByIdAsync(int boardId, int groupId)
         {
             var group = await _groupRepository.GetByIdAsync(boardId, groupId);

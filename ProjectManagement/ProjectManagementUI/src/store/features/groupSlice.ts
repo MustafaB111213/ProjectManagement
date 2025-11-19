@@ -39,26 +39,35 @@ interface CreateGroupArgs {
     position?: 'top' | 'bottom'; // Frontend tarafında anlık güncelleme için ipucu (opsiyonel)
 }
 // Yeni grup oluşturmak için Thunk
+// Yeni grup oluşturmak için Thunk
 export const createGroup = createAsyncThunk<Group, CreateGroupArgs, { rejectValue: string }>(
     'groups/createGroup',
-    async ({ boardId, groupData, position }, { rejectWithValue }) => { // 'position' argümanı burada alınır
+    async ({ boardId, groupData, position }, { rejectWithValue }) => {
         try {
-            // Backend'in yeni grup için doğru 'order' değerini ayarlaması beklenir
+            // --- DÜZELTME BURADA ---
+            // Backend'e gönderilen veriyi hazırlıyoruz.
+            // groupData'nın (title, color) yanına 'position' bilgisini de ekliyoruz.
+            const payload = {
+                ...groupData,
+                position: position // 'top' veya 'bottom' bilgisini backend'e gönderiyoruz
+            };
+
             const response = await fetch(`${API_BASE_URL}/boards/${boardId}/groups`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(groupData),
+                body: JSON.stringify(payload), // Artık payload içinde position var
             });
+
             if (!response.ok) {
                 const errorData = await response.text();
-                console.error(`Pano ${boardId} için grup oluşturulurken hata: ${response.status} ${response.statusText}`, errorData);
+                console.error(`Pano ${boardId} için grup oluşturulurken hata: ${response.status}`, errorData);
                 throw new Error(errorData || 'Grup oluşturulamadı');
             }
+
             const createdGroup: Group = await response.json();
-            // Backend, oluşturulan grubun ID'sini ve atanmış 'order' değerini DÖNDÜRMELİDİR
             return createdGroup;
         } catch (error: any) {
-             return rejectWithValue(error.message || 'Grup oluşturulamadı');
+            return rejectWithValue(error.message || 'Grup oluşturulamadı');
         }
     }
 );
@@ -80,12 +89,12 @@ export const updateGroup = createAsyncThunk<Group, UpdateGroupArgs, { rejectValu
                 body: JSON.stringify(groupData),
             });
             if (!response.ok) {
-                 const errorData = await response.text();
-                 console.error(`Grup ${groupId} güncellenirken hata: ${response.status} ${response.statusText}`, errorData);
+                const errorData = await response.text();
+                console.error(`Grup ${groupId} güncellenirken hata: ${response.status} ${response.statusText}`, errorData);
                 throw new Error(errorData || 'Grup güncellenemedi');
             }
-             // Backend 204 döndürse bile, reducer'ın kullanması için temel bilgileri döndür
-             return { id: groupId, boardId, ...groupData } as Group; // 'order' eksik olabilir!
+            // Backend 204 döndürse bile, reducer'ın kullanması için temel bilgileri döndür
+            return { id: groupId, boardId, ...groupData } as Group; // 'order' eksik olabilir!
         } catch (error: any) {
             return rejectWithValue(error.message || 'Grup güncellenemedi');
         }
@@ -101,17 +110,17 @@ interface DeleteGroupArgs {
 export const deleteGroup = createAsyncThunk<number, DeleteGroupArgs, { rejectValue: string }>(
     'groups/deleteGroup',
     async ({ boardId, groupId }, { rejectWithValue }) => {
-         try {
+        try {
             const response = await fetch(`${API_BASE_URL}/boards/${boardId}/groups/${groupId}`, { method: 'DELETE' });
-             if (!response.ok) {
-                 const errorData = await response.text();
-                 console.error(`Grup ${groupId} silinirken hata: ${response.status} ${response.statusText}`, errorData);
-                 throw new Error(errorData || 'Grup silinemedi');
-             }
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error(`Grup ${groupId} silinirken hata: ${response.status} ${response.statusText}`, errorData);
+                throw new Error(errorData || 'Grup silinemedi');
+            }
             return groupId; // Reducer için ID'yi döndür
-         } catch (error: any) {
-             return rejectWithValue(error.message || 'Grup silinemedi');
-         }
+        } catch (error: any) {
+            return rejectWithValue(error.message || 'Grup silinemedi');
+        }
     }
 );
 
@@ -140,8 +149,8 @@ export const updateGroupOrder = createAsyncThunk<void, ReorderGroupsArgs, { reje
             }
             // Başarılı olursa bir değer döndürmeye gerek yok
         } catch (error: any) {
-             console.error('Grup sırası güncellenirken fetch hatası:', error);
-             return rejectWithValue(error.message || 'Grup sırası güncellenirken bir ağ hatası oluştu');
+            console.error('Grup sırası güncellenirken fetch hatası:', error);
+            return rejectWithValue(error.message || 'Grup sırası güncellenirken bir ağ hatası oluştu');
         }
     }
 );
@@ -178,7 +187,7 @@ const groupSlice = createSlice({
         },
         // Grupları state içinde anlık olarak yeniden sıralar (Sürükle-Bırak için İyimser Güncelleme)
         reorderGroupsLocally: (state, action: PayloadAction<{ orderedGroups: Group[] }>) => {
-             state.items = action.payload.orderedGroups;
+            state.items = action.payload.orderedGroups;
         }
     },
     // --- Asenkron Thunk'ların Durumlarını İşleme ---
@@ -191,8 +200,11 @@ const groupSlice = createSlice({
             })
             .addCase(fetchGroupsForBoard.fulfilled, (state, action: PayloadAction<Group[]>) => {
                 state.status = 'succeeded';
-                // Backend'den gelen sıralı listeyi doğrudan kullan (SIRALAMA YAPMA)
-                state.items = action.payload;
+
+                // --- DÜZELTME BURADA ---
+                // Backend'den gelen listeyi 'order' (sıra numarası) değerine göre sıralıyoruz.
+                // Eğer backend veriyi ID sırasına göre gönderiyorsa, bu işlem onu düzeltir.
+                state.items = action.payload.sort((a, b) => a.order - b.order);
             })
             .addCase(fetchGroupsForBoard.rejected, (state, action) => {
                 state.status = 'failed';
@@ -201,15 +213,16 @@ const groupSlice = createSlice({
 
             // Grup Oluşturma
             .addCase(createGroup.pending, (state) => { /* İsteğe bağlı yüklenme durumu */ })
-            .addCase(createGroup.fulfilled, (state, action) => { // action: PayloadAction<Group> tipinde
+            .addCase(createGroup.fulfilled, (state, action) => {
                 const yeniGrup = action.payload;
-                const position = (action.meta.arg as CreateGroupArgs).position; // Cast ederek position'a eriş
+                // Thunk çağrılırken gönderilen argümanlardan 'position'ı alıyoruz
+                const position = (action.meta.arg as CreateGroupArgs).position;
 
-                // İyimser güncelleme
+                // İyimser güncelleme (Frontend'de anında gösterme)
                 if (position === 'top') {
-                    state.items.unshift(yeniGrup);
+                    state.items.unshift(yeniGrup); // Listenin BAŞINA ekler
                 } else {
-                    state.items.push(yeniGrup);
+                    state.items.push(yeniGrup);    // Listenin SONUNA ekler
                 }
             })
             .addCase(createGroup.rejected, (state, action) => {
@@ -228,7 +241,7 @@ const groupSlice = createSlice({
                     state.items[index] = { ...state.items[index], ...guncellenenGrupVerisi };
                 }
             })
-             .addCase(updateGroup.rejected, (state, action) => {
+            .addCase(updateGroup.rejected, (state, action) => {
                 state.status = 'failed';
                 state.error = (action.payload as string) || action.error.message || 'Grup güncellenemedi';
             })
@@ -250,9 +263,9 @@ const groupSlice = createSlice({
                 // console.log("Grup sırası güncelleniyor...");
             })
             .addCase(updateGroupOrder.fulfilled, (state) => {
-                 state.isUpdatingOrder = false;
-                 // console.log("Grup sırası başarıyla güncellendi.");
-                 // İyimser güncelleme zaten yapıldı
+                state.isUpdatingOrder = false;
+                // console.log("Grup sırası başarıyla güncellendi.");
+                // İyimser güncelleme zaten yapıldı
             })
             .addCase(updateGroupOrder.rejected, (state, action) => {
                 state.isUpdatingOrder = false;
@@ -261,7 +274,7 @@ const groupSlice = createSlice({
                 console.error("Grup sırası güncellenirken hata:", state.error);
                 // TODO: Hata durumunda iyimser güncellemeyi geri al (daha karmaşık)
             });
-        },
+    },
 });
 
 // Senkron action'ları export et

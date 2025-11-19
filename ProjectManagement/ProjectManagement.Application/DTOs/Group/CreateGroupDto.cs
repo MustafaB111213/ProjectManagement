@@ -2,5 +2,6 @@
 {
     public class CreateGroupDto : GroupForManipulationDto
     {
+        public string? Position { get; set; }
     }
 }
