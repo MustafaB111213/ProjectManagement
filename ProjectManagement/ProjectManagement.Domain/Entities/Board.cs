@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.Common;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjectManagement.Domain.Entities
+﻿namespace ProjectManagement.Domain.Entities
 {
     public class Board : BaseEntity
     {

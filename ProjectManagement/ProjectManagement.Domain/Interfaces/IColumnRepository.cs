@@ -1,6 +1,4 @@
 ﻿using ProjectManagement.Domain.Entities;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace ProjectManagement.Domain.Interfaces
 {

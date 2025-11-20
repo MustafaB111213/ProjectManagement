@@ -17,6 +17,9 @@ const BASELINE_HEIGHT_PX = 8; // Daha ince bir çizgi
 // (Bar Yüksekliği - Baseline Yüksekliği) / 2 + Barın Tepesi
 const BASELINE_CENTER_OFFSET = (GANTT_BAR_HEIGHT_PX - BASELINE_HEIGHT_PX) / 20;
 
+// YENİ: Baseline'ın nokta gibi görünmemesi için minimum genişlik (örneğin 6px veya 8px)
+const MIN_BASELINE_WIDTH_PX = 16;
+
 interface GanttBarRowProps {
     itemData: ProcessedItemData;
     originalItemData: ProcessedItemData;
@@ -74,7 +77,7 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
 
     return (
         <React.Fragment>
-            
+
             {/* 1. BİRİNCİL BAR (Normal Görev) */}
             {barData && (
                 <React.Fragment>
@@ -88,7 +91,7 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                         style={{
                             ...barData.style,
                             position: 'absolute',
-                            top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX}px`, 
+                            top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX}px`,
                             zIndex: isActive ? 12 : 11,
                             transition: isActive ? 'none' : 'all 150ms ease',
                         }}
@@ -113,19 +116,23 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
 
             {/* 0. TEMEL ÇİZGİ (BASELINE) */}
             {/* Ana barın ÜZERİNDE ince siyah/gri bir çizgi olarak görünür */}
+            {/* 0. TEMEL ÇİZGİ (BASELINE) */}
             {baselineBarData && (
                 <div
                     className="absolute rounded-full pointer-events-none border border-gray-600 shadow-sm"
                     style={{
                         left: `${baselineBarData.startX}px`,
-                        width: `${Math.max(2, baselineBarData.endX - baselineBarData.startX)}px`,
+                        // DEĞİŞİKLİK BURADA: 2 yerine MIN_BASELINE_WIDTH_PX kullanıyoruz
+                        width: `${Math.max(MIN_BASELINE_WIDTH_PX, baselineBarData.endX - baselineBarData.startX)}px`,
+
                         // Barın tam ortasından geçecek şekilde konumlandırıldı
-                        top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX + BASELINE_CENTER_OFFSET}px`, 
+                        top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX + BASELINE_CENTER_OFFSET}px`,
                         height: `${BASELINE_HEIGHT_PX}px`,
-                        zIndex: 12, 
-                        backgroundColor: '#4e3694ff', // Koyu gri (gray-700)
-                        opacity: 0.85, // Hafif şeffaflık
-                        // Tarama efekti (İsteğe bağlı, şu an düz renk daha net görünür)
+                        zIndex: 12,
+                        backgroundColor: '#4e3694ff',
+                        opacity: 0.85,
+                        // Görünürlüğü artırmak için min-width de ekleyebilirsiniz (opsiyonel, yukarıdaki width zaten halleder)
+                        minWidth: `${MIN_BASELINE_WIDTH_PX}px`
                     }}
                     title={`Temel Çizgi: ${format(baselineBarData.startDate, 'dd MMM')} - ${format(baselineBarData.endDate, 'dd MMM')}`}
                 />
@@ -164,7 +171,7 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                                 transition: isActive ? 'none' : 'all 150ms ease',
                             }}
                         >
-                             <div data-resize-handle="start" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', bar.timelineColumnId)} className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-l" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
+                            <div data-resize-handle="start" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', bar.timelineColumnId)} className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-l" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
                             <div data-resize-handle="end" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', bar.timelineColumnId)} className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-r" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
                         </div>
                         {renderDateBadges(bar, visualBarTop)}
@@ -172,8 +179,8 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                 );
             })}
 
-             {/* 3. DIŞ ETİKET */}
-             {itemData.barData && itemData.externalLabel && (
+            {/* 3. DIŞ ETİKET */}
+            {itemData.barData && itemData.externalLabel && (
                 <div
                     className="absolute flex items-center px-3 text-xs text-gray-700 pointer-events-none truncate"
                     style={{

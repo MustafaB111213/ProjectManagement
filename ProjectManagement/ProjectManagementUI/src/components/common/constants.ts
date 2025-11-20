@@ -1,5 +1,7 @@
-export const API_BASE_URL = 'https://localhost:7264/api';
-
+// API tabanı, ortam değişkeni üzerinden yapılandırılabilir.
+// Geliştirme sırasında Vite proxy'si ile aynı origin'den istek atmak için
+// varsayılan olarak "/api" yolunu kullanır.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 // --- Zoom Adımları ---
 // Her adımda gün genişliğini tanımla (daha fazla adım eklenebilir)
 export const ZOOM_STEPS = [

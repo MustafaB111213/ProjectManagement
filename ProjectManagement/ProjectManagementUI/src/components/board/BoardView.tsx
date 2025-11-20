@@ -1,6 +1,6 @@
 // src/components/board/BoardView.tsx
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
     fetchViewsForBoard,
@@ -61,7 +61,7 @@ import {
 import BoardHeader from './BoardHeader';
 import GroupSection from '../group/GroupSection';
 import BoardActionbar from './BoardActionbar';
-import BoardViewTabs, { type BoardViewTabInfo } from './BoardViewTabs';
+import BoardViewTabs from './BoardViewTabs';
 import GanttView from './GanttView';
 import ItemRow from '../item/ItemRow'; // Overlay için
 
@@ -137,7 +137,7 @@ const BoardView: React.FC = () => {
         // Tipine göre varsayılan bir isim belirleyelim
         let defaultName = 'Yeni Görünüm';
         if (type === 'table') defaultName = 'Tablo Görünümü';
-        if (type === 'gantt') defaultName = 'Zaman Çizelgesi';
+        if (type === 'gantt') defaultName = 'Gantt Görünümü';
         if (type === 'calendar') defaultName = 'Takvim';
 
         // Redux Action'ı tetikle

@@ -5,10 +5,6 @@ using ProjectManagement.Application.Interfaces;
 using ProjectManagement.Data;
 using ProjectManagement.Domain.Entities;
 using ProjectManagement.Domain.Interfaces;
-using System.Collections.Generic; // List ve IEnumerable için
-using System.Linq; // Where, OrderBy, Any, FirstOrDefault vb. için
-using System.Threading.Tasks; // Task, ToListAsync vb. için
-using System; // Exception için
 
 namespace ProjectManagement.Application.Services
 {

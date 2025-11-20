@@ -1,12 +1,10 @@
-import { useEffect } from 'react'; // useEffect'i import et
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { fetchBoards, setSelectedBoard } from './store/features/boardSlice';
-import { fetchGroupsForBoard } from './store/features/groupSlice';
-import { fetchColumnsForBoard } from './store/features/columnSlice';
 import WorkspaceSidebar from './components/layout/WorkspaceSidebar';
 import BoardView from './components/board/BoardView';
 import { BsKanbanFill } from 'react-icons/bs';
 import { fetchUsers, selectUsersStatus } from './store/features/userSlice';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { fetchBoards, setSelectedBoard } from './store/features/boardSlice';
+import { useEffect } from 'react';
 
 const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -33,28 +31,60 @@ const App: React.FC = () => {
   // --- 2. ETAP: Panolar yüklendikten sonra hafızadaki panoyu geri yükle ---
   useEffect(() => {
     // Bu useEffect, panoların yüklenme durumu değiştiğinde çalışır.
-    if (boardStatus === 'succeeded') {
-      // Panolar başarıyla yüklendiğinde, localStorage'ı kontrol et.
-      const lastSelectedBoardId = localStorage.getItem('selectedBoardId');
+    if (boardStatus !== 'succeeded') return;;
 
-      if (lastSelectedBoardId) {
-        // Eğer hafızada bir ID varsa...
-        const boardId = parseInt(lastSelectedBoardId, 10);
-        
-        // Ve bu ID'ye sahip pano, yeni çektiğimiz pano listesinde gerçekten varsa...
-        if (boards.some(board => board.id === boardId)) {
+      const pathMatch = window.location.pathname.match(/^\/boards\/(\d+)/);
+    const boardIdFromPath = pathMatch ? parseInt(pathMatch[1], 10) : null;
+    const storedBoardId = localStorage.getItem('selectedBoardId');
+
+    if (boardIdFromPath && boards.some((board) => board.id === boardIdFromPath)) {
+      if (selectedBoardId !== boardIdFromPath) {
+        dispatch(setSelectedBoard(boardIdFromPath));
+      }
+      localStorage.setItem('selectedBoardId', boardIdFromPath.toString());
+      return;
+    }
+
+    if (storedBoardId) {
+      const boardId = parseInt(storedBoardId, 10);
+      if (boards.some((board) => board.id === boardId)) {
+        if (window.location.pathname !== `/boards/${boardId}`) {
+          window.history.replaceState(null, '', `/boards/${boardId}`);
+        }
+        if (selectedBoardId !== boardId) {
           // O zaman sanki kullanıcı o panoya yeni tıklamış gibi tüm verileri çek.
           dispatch(setSelectedBoard(boardId));
-          dispatch(fetchGroupsForBoard(boardId));
-          dispatch(fetchColumnsForBoard(boardId));
-        } else {
-          // Eğer pano artık mevcut değilse (belki silinmiştir), hafızayı temizle.
-          localStorage.removeItem('selectedBoardId');
+          
         }
+        } else {
+        localStorage.removeItem('selectedBoardId');
+      }
+    } else if (window.location.pathname !== '/') {
+      window.history.replaceState(null, '', '/');
+      if (selectedBoardId !== null) {
+        dispatch(setSelectedBoard(null));
       }
     }
-  }, [boardStatus, boards, dispatch]); // Bu değerlerden biri değiştiğinde tekrar çalışır.
+  }, [boardStatus, boards, dispatch, selectedBoardId]);
 
+   useEffect(() => {
+    const handlePopState = () => {
+      const pathMatch = window.location.pathname.match(/^\/boards\/(\d+)/);
+      const boardIdFromPath = pathMatch ? parseInt(pathMatch[1], 10) : null;
+
+      if (boardIdFromPath && boards.some((board) => board.id === boardIdFromPath)) {
+        dispatch(setSelectedBoard(boardIdFromPath));
+        localStorage.setItem('selectedBoardId', boardIdFromPath.toString());
+      } else {
+        dispatch(setSelectedBoard(null));
+        localStorage.removeItem('selectedBoardId');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [boards, dispatch]);
+  
   return (
     <div className="flex h-screen font-sans">
       <WorkspaceSidebar />
