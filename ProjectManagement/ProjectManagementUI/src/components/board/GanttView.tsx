@@ -7,7 +7,7 @@ import { selectAllGroups } from '../../store/features/groupSlice';
 import { selectAllItemsFlat } from '../../store/features/itemSlice';
 import { selectAllColumns } from '../../store/features/columnSlice';
 import { selectSelectedBoard } from '../../store/features/boardSlice';
-import GanttToolbar from '../gantt/GanttToolbar';
+import GanttToolbar, { type ViewModeOption } from '../gantt/GanttToolbar';
 import GanttLeftPanel from '../gantt/GanttLeftPanel';
 import GanttRightPanel from '../gantt/GanttRightPanel';
 import { addDays, isValid, parseISO } from 'date-fns';
@@ -91,7 +91,7 @@ const GanttView: React.FC<GanttViewProps> = ({
     }, [allItems, activeTimelineIds]);
 
     const {
-        viewMinDate, viewMaxDate, currentDayWidth, currentLevelLabel,
+        viewMinDate, viewMaxDate, currentDayWidth, currentLevel,
         debouncedLoadMore,
         scrollToDate,
         handleViewModeChange,
@@ -195,7 +195,7 @@ const GanttView: React.FC<GanttViewProps> = ({
         <div className="flex flex-col h-full w-full border border-gray-200 rounded-lg shadow-sm overflow-hidden bg-white relative">
             <GanttToolbar
                 scrollToDate={scrollToDate}
-                currentLevelLabel={currentLevelLabel}
+                currentLevel={currentLevel as ViewModeOption}
                 onViewModeChange={handleViewModeChange}
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}

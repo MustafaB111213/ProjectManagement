@@ -21,8 +21,13 @@ export const useGanttTimeline = ({
 }: GanttTimelineProps) => {
 
     // --- STATE'LER ---
-    const [viewMinDate, setViewMinDate] = useState<Date>(() => subYears(new Date(), 1));
-    const [viewMaxDate, setViewMaxDate] = useState<Date>(() => addYears(new Date(), 2));
+    
+    // PERFORMANS NOTU: 10 Yıllık aralık (Geçmiş 5 - Gelecek 5)
+    // Bu sayede zoom yaparken tarih aralığı genişletme tetiklenmez,
+    // render hazırdır ve zıplama/kayma olmaz.
+    const [viewMinDate, setViewMinDate] = useState<Date>(() => subYears(new Date(), 15));
+    const [viewMaxDate, setViewMaxDate] = useState<Date>(() => addYears(new Date(), 15));
+    
     const [focusDate, setFocusDate] = useState<Date | null>(null);
     const [isLoadingMorePast, setIsLoadingMorePast] = useState(false);
     const [isLoadingMoreFuture, setIsLoadingMoreFuture] = useState(false);
@@ -34,45 +39,65 @@ export const useGanttTimeline = ({
     const pendingAutoFitScroll = useRef<{ date: Date, align: 'left' } | null>(null);
 
     const currentDayWidth = ZOOM_STEPS[zoomIndex].dayWidth;
-    const currentLevelLabel = ZOOM_STEPS[zoomIndex].level as ViewModeOption;
+    const currentLevel = ZOOM_STEPS[zoomIndex].level;
 
     // --- TEMBEL YÜKLEME (LAZY LOAD) ---
-    const loadMoreDatesThreshold = 500;
-    const loadMoreMonthsAmount = 6;
+    // Eşik değerini artırdık (2000px). Kullanıcı kenara gelmeden çok önce yükleme başlar.
+    const loadMoreDatesThreshold = 2000;
+    
+    const getLoadAmount = () => {
+        if (currentLevel === 'year' || currentLevel === 'quarter') return { years: 5 };
+        if (currentLevel === 'month') return { months: 24 }; // Ay görünümünde daha fazla yükle
+        return { months: 12 };
+    };
+
     const debouncedLoadMore = useCallback(debounce((
         scrollLeft: number,
         scrollWidth: number,
         offsetWidth: number
     ) => {
-        // AutoFit sırasında lazy load tetiklenmesini engelle
         if (isAutoFitting.current) return;
 
+        const loadAmount = getLoadAmount();
+
+        // Sola (Geçmişe) yaklaşma kontrolü
         if (!isLoadingMorePast && scrollLeft < loadMoreDatesThreshold) {
             setIsLoadingMorePast(true);
             setViewMinDate(prev => {
-                const newMin = subMonths(prev, loadMoreMonthsAmount);
-                setTimeout(() => setIsLoadingMorePast(false), 500);
+                const newMin = loadAmount.years 
+                    ? subYears(prev, loadAmount.years) 
+                    : subMonths(prev, loadAmount.months!);
+                
+                // State güncellemesi sonrası bayrağı indir
+                setTimeout(() => setIsLoadingMorePast(false), 300);
                 return newMin;
             });
         }
+        
+        // Sağa (Geleceğe) yaklaşma kontrolü
         if (!isLoadingMoreFuture && scrollWidth > offsetWidth &&
             (scrollWidth - scrollLeft - offsetWidth) < loadMoreDatesThreshold) {
             setIsLoadingMoreFuture(true);
             setViewMaxDate(prev => {
-                const newMax = addMonths(prev, loadMoreMonthsAmount);
-                setTimeout(() => setIsLoadingMoreFuture(false), 500);
+                const newMax = loadAmount.years 
+                    ? addYears(prev, loadAmount.years) 
+                    : addMonths(prev, loadAmount.months!);
+                
+                setTimeout(() => setIsLoadingMoreFuture(false), 300);
                 return newMax;
             });
         }
-    }, 300), [loadMoreMonthsAmount, isLoadingMorePast, isLoadingMoreFuture]);
+    }, 200), [isLoadingMorePast, isLoadingMoreFuture, currentLevel]);
 
     // --- SCROLL FONKSİYONU ---
     const scrollToDate = useCallback((date: Date, align: 'center' | 'left' = 'center', behavior: 'smooth' | 'auto' = 'smooth') => {
         if (!rightPanelScrollRef.current || !isValid(viewMinDate)) return;
 
+        // viewMinDate sabit kaldığı sürece (10 yıllık buffer sayesinde),
+        // bu hesaplama her zaman tutarlı sonuç verir ve kayma olmaz.
         const msDiff = differenceInMilliseconds(startOfDay(date), startOfDay(viewMinDate));
         const dayDiff = msDiff / (1000 * 60 * 60 * 24);
-        
+
         const containerWidth = rightPanelScrollRef.current.offsetWidth;
         const dateLeftPosition = dayDiff * currentDayWidth;
 
@@ -85,13 +110,13 @@ export const useGanttTimeline = ({
         }
 
         targetScrollLeft = Math.max(0, targetScrollLeft);
-        
+
         rightPanelScrollRef.current.scrollTo({ left: targetScrollLeft, behavior });
     }, [viewMinDate, currentDayWidth, rightPanelScrollRef]);
 
     // --- MANUAL ZOOM GÜNCELLEME ---
+    // Burası kaymayı engelleyen kritik nokta.
     const updateZoomIndexAndScroll = useCallback((newIndexCallback: (prevIndex: number) => number) => {
-        // Eğer AutoFit çalışıyorsa, manuel hesaplamaları atla
         if (isAutoFitting.current || !rightPanelScrollRef.current || !isValid(viewMinDate)) return;
 
         const scrollDiv = rightPanelScrollRef.current;
@@ -99,6 +124,7 @@ export const useGanttTimeline = ({
         const oldOffsetWidth = scrollDiv.offsetWidth;
         const oldDayWidth = currentDayWidth;
 
+        // 1. Zoom yapmadan önce ekranın TAM ORTASINDAKİ tarihi (noktayı) buluyoruz.
         const centerPx = oldScrollLeft + (oldOffsetWidth / 2);
         const centerDayOffsetFloat = centerPx / oldDayWidth;
 
@@ -106,41 +132,50 @@ export const useGanttTimeline = ({
         if (newIndex < 0 || newIndex > MAX_ZOOM_INDEX || newIndex === zoomIndex) return;
 
         const newDayWidth = ZOOM_STEPS[newIndex].dayWidth;
+        
+        // State'i güncelliyoruz
         onZoomIndexChange(newIndex);
 
-        // Render sonrası scroll düzeltmesi
+        // 2. Render sonrası (yeni genişliklerle) aynı tarihi tekrar ortaya getiriyoruz.
         requestAnimationFrame(() => {
             if (rightPanelScrollRef.current) {
                 const currentOffsetWidth = rightPanelScrollRef.current.offsetWidth;
+                // Yeni scroll pozisyonunu hesapla: (EskiGünSayısı * YeniPiksel) - YarımEkran
                 const newScrollLeft = (centerDayOffsetFloat * newDayWidth) - (currentOffsetWidth / 2);
+                
                 rightPanelScrollRef.current.scrollTo({
                     left: Math.max(0, newScrollLeft),
-                    behavior: 'auto' // Zoom sırasında smooth scroll baş dönmesi yapar
+                    behavior: 'auto' // Zoom sırasında animasyon kullanmıyoruz (baş dönmesi/kayma hissi olmasın)
                 });
             }
         });
     }, [zoomIndex, currentDayWidth, viewMinDate, onZoomIndexChange, rightPanelScrollRef]);
 
-    // --- AUTO FIT SONRASI SCROLL (useLayoutEffect kullanıyoruz) ---
-    // useLayoutEffect, tarayıcı boyamadan (paint) önce çalışır, böylece titremeyi önler.
+    // --- AUTO FIT SONRASI SCROLL ---
     useLayoutEffect(() => {
         if (pendingAutoFitScroll.current && rightPanelScrollRef.current) {
             const { date, align } = pendingAutoFitScroll.current;
-            
-            // Scroll işlemini ANINDA yap (auto), animasyon kullanma (git-gel yapmaması için)
             scrollToDate(date, align, 'auto');
-            
-            // İşlem bitti, bayrakları indir
             pendingAutoFitScroll.current = null;
-            
-            // Biraz bekle sonra kilidi aç (lazy load hemen tetiklenmesin)
             setTimeout(() => {
                 isAutoFitting.current = false;
             }, 100);
         }
-    }, [currentDayWidth, scrollToDate, rightPanelScrollRef]); 
+    }, [currentDayWidth, scrollToDate, rightPanelScrollRef]);
 
-    // --- EFFECT'LER ---
+    // --- İLK YÜKLEME ---
+    useEffect(() => {
+        if (initialScrollDone.current || !isValid(viewMinDate) || !rightPanelScrollRef.current) {
+            return;
+        }
+        // İlk açılışta Bugüne git
+        const timer = setTimeout(() => {
+            scrollToDate(new Date(), 'center', 'auto');
+            initialScrollDone.current = true;
+        }, 100); // DOM'un tam oturması için minik gecikme
+        return () => clearTimeout(timer);
+    }, [viewMinDate, scrollToDate, rightPanelScrollRef]);
+
     useEffect(() => {
         if (focusDate) {
             const timer = setTimeout(() => {
@@ -151,36 +186,27 @@ export const useGanttTimeline = ({
         }
     }, [focusDate, scrollToDate]);
 
-    useEffect(() => {
-        if (initialScrollDone.current || !isValid(viewMinDate) || !rightPanelScrollRef.current) {
-            return;
-        }
-        // İlk açılış scroll'u
-        const timer = setTimeout(() => {
-            scrollToDate(new Date(), 'center', 'auto');
-            initialScrollDone.current = true;
-        }, 100);
-        return () => clearTimeout(timer);
-    }, [viewMinDate, scrollToDate, rightPanelScrollRef]);
-
     // --- HANDLERS ---
     const handleViewModeChange = useCallback((newMode: ViewModeOption) => {
         let targetIndex: number;
-        if (newMode === 'week') targetIndex = 6;
-        else if (newMode === 'month') targetIndex = 2;
-        else targetIndex = DEFAULT_ZOOM_INDEX;
+        switch (newMode) {
+            case 'year': targetIndex = 1; break;
+            case 'quarter': targetIndex = 3; break;
+            case 'month': targetIndex = 5; break;
+            case 'week': targetIndex = 8; break;
+            case 'day': targetIndex = 12; break;
+            default: targetIndex = 10;
+        }
         updateZoomIndexAndScroll(() => targetIndex);
     }, [updateZoomIndexAndScroll]);
 
     const handleZoomIn = useCallback(() => updateZoomIndexAndScroll(prev => Math.min(prev + 1, MAX_ZOOM_INDEX)), [updateZoomIndexAndScroll]);
     const handleZoomOut = useCallback(() => updateZoomIndexAndScroll(prev => Math.max(prev - 1, 0)), [updateZoomIndexAndScroll]);
 
-    // --- AUTO FIT (DÜZELTİLDİ) ---
     const handleAutoFit = useCallback(() => {
         const { minDate, maxDate } = projectDateRange;
         if (!minDate || !maxDate || !rightPanelScrollRef.current) return;
 
-        // KİLİDİ AÇ: Diğer scroll efektlerini engelle
         isAutoFitting.current = true;
 
         const containerWidth = rightPanelScrollRef.current.offsetWidth;
@@ -195,16 +221,12 @@ export const useGanttTimeline = ({
             }
         }
 
-        // Hedefi kaydet
         pendingAutoFitScroll.current = { date: minDate, align: 'left' };
 
         if (bestZoomIndex !== zoomIndex) {
-            // Zoom değişecek -> State güncelle -> Re-render -> useLayoutEffect tetiklenir -> Scroll yapılır
             onZoomIndexChange(bestZoomIndex);
         } else {
-            // Zoom değişmeyecek -> State değişmez -> useLayoutEffect TETİKLENMEZ.
-            // Bu yüzden burada manuel scroll yapmalıyız.
-            scrollToDate(minDate, 'left', 'auto'); // 'auto' kullanıyoruz, smooth değil
+            scrollToDate(minDate, 'left', 'auto');
             pendingAutoFitScroll.current = null;
             setTimeout(() => { isAutoFitting.current = false; }, 100);
         }
@@ -217,7 +239,7 @@ export const useGanttTimeline = ({
         setViewMinDate,
         setViewMaxDate,
         currentDayWidth,
-        currentLevelLabel,
+        currentLevel,
         debouncedLoadMore,
         scrollToDate,
         handleViewModeChange,

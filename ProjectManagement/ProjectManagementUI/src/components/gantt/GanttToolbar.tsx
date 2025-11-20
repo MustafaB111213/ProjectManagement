@@ -4,12 +4,12 @@ import {
     FiMinus, FiMoreHorizontal, FiSettings
 } from 'react-icons/fi';
 
-export type ViewModeOption = 'day' | 'week' | 'month';
+export type ViewModeOption = 'day' | 'week' | 'month' | 'quarter' | 'year';
 
 interface GanttToolbarProps {
     // Gantt Kontrolleri
     scrollToDate: (date: Date) => void;
-    currentLevelLabel: ViewModeOption;
+    currentLevel: ViewModeOption;
     onViewModeChange: (mode: ViewModeOption) => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
@@ -28,11 +28,13 @@ const VIEW_MODE_LABELS: Record<ViewModeOption, string> = {
     day: 'Gün',
     week: 'Hafta',
     month: 'Ay',
+    quarter: 'Çeyrek',
+    year: 'yıl',
 };
 
 const GanttToolbar: React.FC<GanttToolbarProps> = ({
     scrollToDate,
-    currentLevelLabel,
+    currentLevel,
     onViewModeChange,
     onZoomIn,
     onZoomOut,
@@ -87,7 +89,7 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
                 <div className="relative">
                     <select
                         onChange={handlePresetChange}
-                        value={currentLevelLabel} // Aktif modu göster
+                        value={currentLevel} // Aktif modu göster
                         className={`${buttonBase} appearance-none pr-8 bg-gray-100`}
                         title="Görünüm Seç"
                     >

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppSelector } from '../../store/hooks';
 import Modal from '../common/Modal';
-import GanttToolbar from './GanttToolbar';
+import GanttToolbar, { type ViewModeOption } from '../gantt/GanttToolbar';
 import GanttLeftPanel from './GanttLeftPanel';
 import GanttRightPanel from './GanttRightPanel';
 import GanttSettingsPanel from './GanttSettingsPanel';
@@ -115,7 +115,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
 
     const {
         viewMinDate, viewMaxDate,
-        currentDayWidth, currentLevelLabel,
+        currentDayWidth, currentLevel,
         scrollToDate,
         handleViewModeChange,
         handleZoomIn,
@@ -180,7 +180,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                 <div className="flex-shrink-0 pt-6 pb-0 px-4">
                     <GanttToolbar
                         scrollToDate={scrollToDate}
-                        currentLevelLabel={currentLevelLabel}
+                        currentLevel={currentLevel as ViewModeOption}
                         onViewModeChange={handleViewModeChange}
                         onZoomIn={handleZoomIn}
                         onZoomOut={handleZoomOut}

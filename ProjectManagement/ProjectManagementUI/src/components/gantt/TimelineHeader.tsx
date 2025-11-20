@@ -1,37 +1,43 @@
-// src/components/gantt/TimelineHeader.tsx (PROFESYONEL VERSİYON)
+// src/components/gantt/TimelineHeader.tsx
 
 import React, { useMemo } from 'react';
 import {
     eachDayOfInterval,
     eachWeekOfInterval,
     eachMonthOfInterval,
-    eachYearOfInterval, 
+    eachQuarterOfInterval,
+    eachYearOfInterval,
     format,
     differenceInCalendarDays,
     endOfWeek,
     endOfMonth,
+    endOfQuarter,
     endOfYear,
     isSameDay,
     min,
-    max
+    max,
+    addYears,
+    startOfWeek,
+    startOfMonth, // Gerekirse kullanılabilir
+    startOfQuarter // Gerekirse kullanılabilir
 } from 'date-fns';
-import { tr } from 'date-fns/locale'; // Türkçe aylar için
+import { tr } from 'date-fns/locale';
 
 interface TimelineHeaderProps {
     viewMinDate: Date;
     viewMaxDate: Date;
-    dayWidthPx: number; // Her bir günün genişliği (constants.ts'den gelir)
-    rowHeightPx: number; // Satır yüksekliği (sol panel ile aynı)
+    dayWidthPx: number;
+    rowHeightPx: number;
 }
 
-// Ay veya Hafta grupları için arayüz
 interface IntervalGroup {
-    key: string;       // React 'key' prop'u için benzersiz string
-    name: string;      // Ekranda görünecek etiket (örn: "Kasım 2025" veya "H42")
+    key: string;
+    name: string;
     startDate: Date;
     endDate: Date;
-    widthPx: number;   // Grubun toplam piksel genişliği
-    isToday?: boolean; // "Bugün" sütununu işaretlemek için
+    widthPx: number;
+    isToday?: boolean;
+    className?: string;
 }
 
 const TimelineHeader: React.FC<TimelineHeaderProps> = ({
@@ -40,172 +46,299 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
     dayWidthPx,
     rowHeightPx,
 }) => {
-
-    // "Bugün" tarihini her render'da al (saat değişimi riskine karşı)
     const today = new Date();
 
-// --- HANGİ BAŞLIK SEVİYESİNİ GÖSTERECEĞİMİZİ BELİRLE ---
-    // Bu mantık, 'constants.ts' dosyanızdaki YENİ 13 adımlı (0-12)
-    // ZOOM_STEPS dizisine göre güncellendi.
+    // --- ZOOM SEVİYESİ MANTIĞI (Hiyerarşi Belirleme) ---
+    
+    // 1. YIL GÖRÜNÜMÜ: 0.5px - 1.5px (Altta Yıl, Üstte On Yıl)
+    const isYearZoom = dayWidthPx <= 1.5;
 
-    // Yıl > Ay Görünümü (En uzak zoom)
-    // 'month' seviyesi 10px'e kadar (dahil) olanları kapsar (Index 0-3)
-    const isMonthZoom = dayWidthPx <= 10;
+    // 2. ÇEYREK GÖRÜNÜMÜ: 2px - 6px (Altta Çeyrek, Üstte Yıl)
+    const isQuarterZoom = dayWidthPx > 1.5 && dayWidthPx <= 6;
 
-    // Ay > Gün Görünümü (Yakın zoom)
-    // 'day' seviyesi 30px'ten BÜYÜK olanları kapsar (Index 8-12, dayWidth 35 ve üstü)
-    const isDayZoom = dayWidthPx > 60;
+    // 3. AY GÖRÜNÜMÜ: 7px - 15px (Altta Ay, Üstte Çeyrek(Yıl))
+    const isMonthZoom = dayWidthPx > 6 && dayWidthPx <= 15;
 
-    // Ay > Hafta Görünümü (Orta zoom)
-    // Geriye kalan her şey (10px'ten büyük, 30px'e eşit veya küçük) 'Hafta'dır. (Index 4-7)
-    const isWeekZoom = !isMonthZoom && !isDayZoom;
+    // 4. GÜN GÖRÜNÜMÜ: 60px ve üzeri (Altta Gün, Üstte Hafta(Ay Yıl))
+    const isDayZoom = dayWidthPx >= 60;
 
-    // --- Üst Başlık (Aylar veya Yıllar) ---
+    // 5. HAFTA GÖRÜNÜMÜ: Geriye kalanlar (20px - 50px) (Altta Hafta, Üstte Ay(Çeyrek))
+    const isWeekZoom = !isYearZoom && !isQuarterZoom && !isMonthZoom && !isDayZoom;
+
+
+    // --- ÜST BAŞLIK HESAPLAMASI ---
     const topHeaderIntervals = useMemo((): IntervalGroup[] => {
-        if (isNaN(viewMinDate.getTime()) || isNaN(viewMaxDate.getTime()) || viewMaxDate < viewMinDate) {
-            return [];
-        }
+        if (isNaN(viewMinDate.getTime()) || isNaN(viewMaxDate.getTime()) || viewMaxDate < viewMinDate) return [];
 
-        let intervals: Date[];
-        let formatStr: string;
-
-        if (isMonthZoom) {
-            // UZAK ZOOM: Üst başlık YILLARI gösterir (örn: "2025")
-            intervals = eachYearOfInterval({ start: viewMinDate, end: viewMaxDate });
-            formatStr = 'yyyy';
-        } else {
-            // ORTA ve YAKIN ZOOM: Üst başlık AYLARI gösterir (örn: "Kasım 2025")
-            intervals = eachMonthOfInterval({ start: viewMinDate, end: viewMaxDate });
-            formatStr = 'MMMM yyyy';
-        }
-
-        return intervals.map((intervalStart) => {
-            let intervalEnd: Date;
-            if (isMonthZoom) {
-                intervalEnd = endOfYear(intervalStart); // Yılın son günü
-            } else {
-                intervalEnd = endOfMonth(intervalStart); // Ayın son günü
-            }
-
-            // Görünüm aralığıyla kesişen günleri bul
-            const start = max([viewMinDate, intervalStart]);
-            const end = min([viewMaxDate, intervalEnd]);
-            const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
-            const name = format(intervalStart, formatStr, { locale: tr });
+        // 1. YIL GÖRÜNÜMÜ -> Üstte ON YILLAR (Decades)
+        if (isYearZoom) {
+            const startYear = viewMinDate.getFullYear();
+            const endYear = viewMaxDate.getFullYear();
+            const startDecade = Math.floor(startYear / 10) * 10;
+            const endDecade = Math.floor(endYear / 10) * 10;
             
-            return {
-                key: name, // Yıl veya Ay adı benzersizdir
-                name: name.charAt(0).toUpperCase() + name.slice(1),
-                startDate: start,
-                endDate: end,
-                widthPx: daysInView * dayWidthPx
-            };
-        });
-    }, [viewMinDate, viewMaxDate, dayWidthPx, isMonthZoom]);
-
-    // --- Alt Başlık (Aylar, Haftalar veya Günler) ---
-    const bottomHeaderIntervals = useMemo((): IntervalGroup[] => {
-        if (isNaN(viewMinDate.getTime()) || isNaN(viewMaxDate.getTime()) || viewMaxDate < viewMinDate) {
-            return [];
-        }
-
-        // YAKIN ZOOM: Alt başlık GÜNLERİ gösterir (örn: "5", "6", "7")
-        if (isDayZoom) {
-            const days = eachDayOfInterval({ start: viewMinDate, end: viewMaxDate });
-            return days.map(day => {
-                const dayStr = format(day, 'd'); // Sadece gün numarası
-                return {
-                    key: day.toISOString(), // Gün için en benzersiz key
-                    name: dayStr,
-                    startDate: day,
-                    endDate: day,
-                    widthPx: dayWidthPx,
-                    isToday: isSameDay(day, today) // "Bugün" kontrolü
-                };
-            });
-        }
-        // ORTA ZOOM: Alt başlık HAFTALARI gösterir (örn: "H42", "H43")
-        else if (isWeekZoom) {
-            const weeks = eachWeekOfInterval({ start: viewMinDate, end: viewMaxDate }, { weekStartsOn: 1 }); // Pzt başlar
-            return weeks.map(weekStart => {
-                const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-                const start = max([viewMinDate, weekStart]);
-                const end = min([viewMaxDate, weekEnd]);
-                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
-                // 'ww', ISO hafta numarasını verir (01-53)
-                const weekNumStr = format(weekStart, 'ww', { locale: tr, weekStartsOn: 1 });
+            const intervals: IntervalGroup[] = [];
+            for (let y = startDecade; y <= endDecade; y += 10) {
+                const decadeStart = new Date(y, 0, 1);
+                const decadeEnd = endOfYear(addYears(decadeStart, 9));
                 
+                const start = max([viewMinDate, decadeStart]);
+                const end = min([viewMaxDate, decadeEnd]);
+                
+                if (start <= end) {
+                    const daysInView = differenceInCalendarDays(end, start) + 1;
+                    intervals.push({
+                        key: `decade-${y}`,
+                        name: `${y} - ${y + 9}`, // Örn: 2020 - 2029
+                        startDate: start,
+                        endDate: end,
+                        widthPx: daysInView * dayWidthPx
+                    });
+                }
+            }
+            return intervals;
+        }
+
+        // 2. ÇEYREK GÖRÜNÜMÜ -> Üstte YILLAR
+        if (isQuarterZoom) {
+            const years = eachYearOfInterval({ start: viewMinDate, end: viewMaxDate });
+            return years.map(yearStart => {
+                const yearEnd = endOfYear(yearStart);
+                const start = max([viewMinDate, yearStart]);
+                const end = min([viewMaxDate, yearEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+
                 return {
-                    key: `H${weekNumStr}-${weekStart.getFullYear()}`, // Benzersiz key
-                    name: `H${weekNumStr}`,
+                    key: `top-year-${yearStart.getFullYear()}`,
+                    name: yearStart.getFullYear().toString(), // Örn: 2025
                     startDate: start,
                     endDate: end,
                     widthPx: daysInView * dayWidthPx
                 };
             });
         }
-        // UZAK ZOOM: Alt başlık AYLARI gösterir (örn: "Oca", "Şub")
-        else if (isMonthZoom) {
+
+        // 3. AY GÖRÜNÜMÜ -> Üstte ÇEYREK (YIL)
+        if (isMonthZoom) {
+            const quarters = eachQuarterOfInterval({ start: viewMinDate, end: viewMaxDate });
+            return quarters.map(qStart => {
+                const qEnd = endOfQuarter(qStart);
+                const start = max([viewMinDate, qStart]);
+                const end = min([viewMaxDate, qEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+                
+                // İstenen format: "Çeyrek (Yıl)" -> "Ç1 (2025)"
+                const qName = format(qStart, 'QQQ (yyyy)', { locale: tr });
+
+                return {
+                    key: `top-q-${qStart.toISOString()}`,
+                    name: qName,
+                    startDate: start,
+                    endDate: end,
+                    widthPx: daysInView * dayWidthPx
+                };
+            });
+        }
+
+        // 4. HAFTA GÖRÜNÜMÜ -> Üstte AY (ÇEYREK)
+        if (isWeekZoom) {
             const months = eachMonthOfInterval({ start: viewMinDate, end: viewMaxDate });
             return months.map(monthStart => {
                 const monthEnd = endOfMonth(monthStart);
                 const start = max([viewMinDate, monthStart]);
                 const end = min([viewMaxDate, monthEnd]);
                 const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
-                const monthStr = format(monthStart, 'MMM', { locale: tr }); // "Oca", "Şub"
-
+                
+                // İstenen format: "Ay (Çeyrek)" -> "Ocak (Ç1)"
+                const name = format(monthStart, 'MMMM (YYY)', { locale: tr });
+                
                 return {
-                    key: monthStart.toISOString(), // Benzersiz key
-                    name: monthStr.charAt(0).toUpperCase() + monthStr.slice(1),
+                    key: `top-m-${monthStart.toISOString()}`,
+                    name: name.charAt(0).toUpperCase() + name.slice(1), // Baş harfi büyüt
                     startDate: start,
                     endDate: end,
                     widthPx: daysInView * dayWidthPx
                 };
             });
         }
-        // Hiçbiri eşleşmezse (teorik olarak imkansız)
-        else {
-            return [];
+
+        // 5. GÜN GÖRÜNÜMÜ -> Üstte HAFTA (AY YIL)
+        if (isDayZoom) {
+            const weeks = eachWeekOfInterval({ start: viewMinDate, end: viewMaxDate }, { weekStartsOn: 1 });
+            return weeks.map(weekStart => {
+                const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+                const start = max([viewMinDate, weekStart]);
+                const end = min([viewMaxDate, weekEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+                
+                // İstenen format: "Hafta (Ay Yıl)" -> "H42 (Eki 2025)"
+                const weekNum = format(weekStart, 'ww', { weekStartsOn: 1 });
+                const monthNameShort = format(weekStart, 'MMM', { locale: tr });
+                const year = format(weekStart, 'yyyy');
+                
+                return {
+                    key: `top-w-${weekStart.toISOString()}`,
+                    name: `H${weekNum} (${monthNameShort} ${year})`, 
+                    startDate: start,
+                    endDate: end,
+                    widthPx: daysInView * dayWidthPx
+                };
+            });
         }
-    }, [viewMinDate, viewMaxDate, dayWidthPx, isDayZoom, isWeekZoom, isMonthZoom, today]);
+
+        return [];
+    }, [viewMinDate, viewMaxDate, dayWidthPx, isYearZoom, isQuarterZoom, isMonthZoom, isWeekZoom, isDayZoom]);
+
+
+    // --- ALT BAŞLIK HESAPLAMASI ---
+    const bottomHeaderIntervals = useMemo((): IntervalGroup[] => {
+        if (isNaN(viewMinDate.getTime()) || isNaN(viewMaxDate.getTime()) || viewMaxDate < viewMinDate) return [];
+
+        // 1. YIL GÖRÜNÜMÜ -> Altta YILLAR
+        if (isYearZoom) {
+            const years = eachYearOfInterval({ start: viewMinDate, end: viewMaxDate });
+            return years.map(yearStart => {
+                const yearEnd = endOfYear(yearStart);
+                const start = max([viewMinDate, yearStart]);
+                const end = min([viewMaxDate, yearEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+
+                return {
+                    key: `bot-y-${yearStart.getFullYear()}`,
+                    name: yearStart.getFullYear().toString(),
+                    startDate: start,
+                    endDate: end,
+                    widthPx: daysInView * dayWidthPx,
+                    isToday: yearStart.getFullYear() === today.getFullYear()
+                };
+            });
+        }
+
+        // 2. ÇEYREK GÖRÜNÜMÜ -> Altta ÇEYREKLER
+        if (isQuarterZoom) {
+            const quarters = eachQuarterOfInterval({ start: viewMinDate, end: viewMaxDate });
+            return quarters.map(qStart => {
+                const qEnd = endOfQuarter(qStart);
+                const start = max([viewMinDate, qStart]);
+                const end = min([viewMaxDate, qEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+                
+                // Örn: "Ç1"
+                const qName = format(qStart, 'QQQ', { locale: tr });
+
+                return {
+                    key: `bot-q-${qStart.toISOString()}`,
+                    name: qName,
+                    startDate: start,
+                    endDate: end,
+                    widthPx: daysInView * dayWidthPx,
+                    // Bugün bu çeyreğin içinde mi?
+                    isToday: today >= qStart && today <= qEnd
+                };
+            });
+        }
+
+        // 3. AY GÖRÜNÜMÜ -> Altta AYLAR
+        if (isMonthZoom) {
+            const months = eachMonthOfInterval({ start: viewMinDate, end: viewMaxDate });
+            return months.map(monthStart => {
+                const monthEnd = endOfMonth(monthStart);
+                const start = max([viewMinDate, monthStart]);
+                const end = min([viewMaxDate, monthEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+                const monthStr = format(monthStart, 'MMM', { locale: tr });
+
+                return {
+                    key: `bot-m-${monthStart.toISOString()}`,
+                    name: monthStr.charAt(0).toUpperCase() + monthStr.slice(1),
+                    startDate: start,
+                    endDate: end,
+                    widthPx: daysInView * dayWidthPx,
+                    isToday: monthStart.getMonth() === today.getMonth() && monthStart.getFullYear() === today.getFullYear()
+                };
+            });
+        }
+
+        // 4. HAFTA GÖRÜNÜMÜ -> Altta HAFTALAR
+        if (isWeekZoom) {
+            const weeks = eachWeekOfInterval({ start: viewMinDate, end: viewMaxDate }, { weekStartsOn: 1 });
+            return weeks.map(weekStart => {
+                const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+                const start = max([viewMinDate, weekStart]);
+                const end = min([viewMaxDate, weekEnd]);
+                const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
+                const weekNumStr = format(weekStart, 'ww', { locale: tr, weekStartsOn: 1 });
+                
+                const isCurrentWeek = today >= startOfWeek(weekStart, { weekStartsOn: 1 }) && 
+                                      today <= endOfWeek(weekStart, { weekStartsOn: 1 });
+
+                return {
+                    key: `bot-w-${weekStart.toISOString()}`,
+                    name: `H${weekNumStr}`,
+                    startDate: start,
+                    endDate: end,
+                    widthPx: daysInView * dayWidthPx,
+                    isToday: isCurrentWeek
+                };
+            });
+        }
+
+        // 5. GÜN GÖRÜNÜMÜ -> Altta GÜNLER
+        if (isDayZoom) {
+            const days = eachDayOfInterval({ start: viewMinDate, end: viewMaxDate });
+            return days.map(day => {
+                const dayStr = format(day, 'd');
+                const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                
+                return {
+                    key: `bot-d-${day.toISOString()}`,
+                    name: dayStr,
+                    startDate: day,
+                    endDate: day,
+                    widthPx: dayWidthPx,
+                    isToday: isSameDay(day, today),
+                    className: isWeekend ? 'bg-gray-50 text-gray-400' : ''
+                };
+            });
+        }
+
+        return [];
+    }, [viewMinDate, viewMaxDate, dayWidthPx, isYearZoom, isQuarterZoom, isMonthZoom, isWeekZoom, isDayZoom, today]);
 
     return (
-        // Toplam yüksekliği koru
         <div
-            className="sticky top-0 bg-gray-50 z-20 border-b border-gray-200"
+            className="sticky top-0 bg-white z-20 border-b border-gray-200 select-none"
             style={{ height: `${rowHeightPx}px` }}
         >
-            {/* ÜST Başlık Satırı (Aylar veya Yıllar) */}
-            <div className="flex border-b border-gray-200 h-1/2">
+            {/* ÜST BAŞLIK SATIRI */}
+            <div className="flex border-b border-gray-200 h-1/2 overflow-hidden">
                 {topHeaderIntervals.map(interval => (
                     <div
                         key={interval.key}
-                        className="flex-shrink-0 flex items-center justify-center px-2 py-1 font-semibold text-xs text-gray-600 text-center border-r border-gray-200"
+                        className="flex-shrink-0 flex items-center justify-center px-2 py-1 font-bold text-xs text-gray-600 text-center border-r border-gray-200 whitespace-nowrap overflow-hidden"
                         style={{ width: `${interval.widthPx}px` }}
+                        title={interval.name}
                     >
                         {interval.name}
                     </div>
                 ))}
             </div>
 
-            {/* ALT Başlık Satırı (Aylar, Haftalar veya Günler) */}
-            <div className="flex h-1/2">
+            {/* ALT BAŞLIK SATIRI */}
+            <div className="flex h-1/2 overflow-hidden">
                 {bottomHeaderIntervals.map((interval) => (
                     <div
                         key={interval.key}
-                        // Sadece 'Gün' görünümündeyken sola border ekle (daha temiz görünüm)
-                        className={`relative flex-shrink-0 flex items-center justify-center px-1 py-1 font-medium text-xs text-gray-500 text-center ${isDayZoom ? 'border-r border-gray-200' : 'border-r border-gray-200'}`}
+                        className={`relative flex-shrink-0 flex items-center justify-center px-1 py-1 font-medium text-xs text-gray-500 text-center border-r border-gray-200 ${interval.className || ''}`}
                         style={{ width: `${interval.widthPx}px` }}
+                        title={interval.name}
                     >
-                        {/* "Bugün" için özel işaretleyici */}
-                        {interval.isToday && (
-                            <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center z-10">
-                                <span className="text-white text-[10px] font-bold">{interval.name}</span>
+                         {interval.isToday ? (
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-5 bg-blue-600 rounded-full flex items-center justify-center z-10 shadow-sm">
+                                <span className="text-white text-[10px] font-bold leading-none">{interval.name}</span>
                             </div>
-                        )}
-                        {/* "Bugün" değilse normal metni göster */}
-                        {!interval.isToday && (
-                            <span>{interval.name}</span>
+                        ) : (
+                            <span className="truncate">{interval.name}</span>
                         )}
                     </div>
                 ))}

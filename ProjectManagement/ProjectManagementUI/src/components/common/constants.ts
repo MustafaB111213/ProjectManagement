@@ -5,27 +5,32 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 // --- Zoom Adımları ---
 // Her adımda gün genişliğini tanımla (daha fazla adım eklenebilir)
 export const ZOOM_STEPS = [
-    // --- "Ay" Seviyesi (TimelineHeader "Yıl > Ay" gösterir) ---
-    { level: 'month', dayWidth: 2 },  // Index 0: En uzak (Yıl görünümü)
-    { level: 'month', dayWidth: 4 },  // Index 1
-    { level: 'month', dayWidth: 7 },  // Index 2
-    { level: 'month', dayWidth: 10 },  // Index 3
+    // --- "Yıl" Seviyesi (Header: On Yıllar > Yıllar) ---
+    // 1 Yıl = 365 gün. 0.5px ile bir yıl yaklaşık 182px yer kaplar.
+    { level: 'year', dayWidth: 0.5 }, // Index 0
+    { level: 'year', dayWidth: 1 },   // Index 1
 
-    // --- "Hafta" Seviyesi (TimelineHeader "Ay > Hafta" gösterir) ---
-    { level: 'week', dayWidth: 19 }, // Index 3
-    { level: 'week', dayWidth: 23 }, // Index 4 (Eski "Hafta" maksimumu)
-    { level: 'week', dayWidth: 28 }, // Index 5 (Eski "Hafta" maksimumu)
-    { level: 'week', dayWidth: 32 }, // Index 6 (Eski "Hafta" maksimumu)
-    { level: 'week', dayWidth: 38 }, // Index 7 (Eski "Hafta" maksimumu)
-    { level: 'week', dayWidth: 45 }, // Index 8 (Eski "Hafta" maksimumu)
+    // --- "Çeyrek" Seviyesi (Header: Yıllar > Çeyrekler) ---
+    // 1 Çeyrek = ~90 gün. 3px ile bir çeyrek ~270px yer kaplar.
+    { level: 'quarter', dayWidth: 2 }, // Index 2
+    { level: 'quarter', dayWidth: 4 }, // Index 3
 
-    // --- "Gün" Seviyesi (TimelineHeader "Ay > Gün" gösterir) ---
-    { level: 'day', dayWidth: 65 },  // Index 9 (Eski 60'a yakın)
-    { level: 'day', dayWidth: 120 },  // Index 10 (Eski 80'e yakın)
-    { level: 'day', dayWidth: 200 },  // Index 11 (Yeni detay seviyesi)
-    { level: 'day', dayWidth: 300 }, // Index 12
-    { level: 'day', dayWidth: 400 }, // Index 13: En yakın (Maksimum detay)
+    // --- "Ay" Seviyesi (Header: Yıllar > Aylar) ---
+    { level: 'month', dayWidth: 7 },   // Index 4
+    { level: 'month', dayWidth: 12 },  // Index 5
 
+    // --- "Hafta" Seviyesi (Header: Aylar > Haftalar) ---
+    { level: 'week', dayWidth: 20 }, // Index 6
+    { level: 'week', dayWidth: 30 }, // Index 7
+    { level: 'week', dayWidth: 40 }, // Index 8
+    { level: 'week', dayWidth: 50 }, // Index 9
+
+    // --- "Gün" Seviyesi (Header: Aylar > Günler) ---
+    { level: 'day', dayWidth: 70 },  // Index 10 (Default)
+    { level: 'day', dayWidth: 100 }, // Index 11
+    { level: 'day', dayWidth: 150 }, // Index 12
+    { level: 'day', dayWidth: 250 }, // Index 13
+    { level: 'day', dayWidth: 400 }, // Index 14
 ];
 
 export const DEFAULT_ZOOM_INDEX = 10;
