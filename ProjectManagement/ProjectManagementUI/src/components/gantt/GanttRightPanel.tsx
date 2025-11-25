@@ -16,6 +16,7 @@ import { useGanttDragResize } from '../../hooks/useGanttDragResize';
 
 import GanttArrows, { type ProcessedItemData, type BarTimelineData } from './GanttArrows';
 import GanttBarRow from './GanttBarRow';
+import { calculateCriticalPath } from '../../utils/ganttDependencies';
 
 const transformUserForView = (user: User) => {
   const initials = `${user.firstName[0] || ''}${user.lastName[0] || ''}`.toUpperCase();
@@ -38,13 +39,12 @@ interface GanttRightPanelProps {
   activeTimelineIds: number[];
   colorByColumnId: number | null;
   labelById: number | null;
-  // --- YENİ PROP ---
   activeBaselineId: number | null;
-  // ----------------
   onItemClick: (itemId: number) => void;
   onMouseEnterBar: (itemId: number) => void;
   onMouseLeaveBar: () => void;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
+  showCriticalPath: boolean;
 }
 
 const STATUS_COLORS: { [key: string]: string } = {
@@ -69,13 +69,12 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
   activeTimelineIds,
   colorByColumnId,
   labelById,
-  // --- YENİ ---
   activeBaselineId,
-  // -----------
   onItemClick,
   onMouseEnterBar,
   onMouseLeaveBar,
-  scrollContainerRef
+  scrollContainerRef,
+  showCriticalPath,
 }) => {
 
   const paneRef = useRef<HTMLDivElement>(null);
@@ -124,6 +123,14 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
       onMouseLeaveBar();
     }
   }, [isDragging, isResizing, onMouseLeaveBar]);
+
+  // KRİTİK YOL HESAPLAMA
+  const criticalPathIds = useMemo(() => {
+    if (!showCriticalPath) return new Set<number>();
+    // Sadece görünür itemlar üzerinde değil, tüm itemlar üzerinde hesaplanmalı
+    // Bu yüzden 'items' (tüm liste) gönderiyoruz.
+    return calculateCriticalPath(items, columns);
+  }, [showCriticalPath, items, columns]);
 
   // --- Processed Data Calculation ---
   const processedData = useMemo(() => {
@@ -201,6 +208,9 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
 
         let currentDependencies: DependencyLink[] = [];
         let validBarCount = 0;
+
+        // KRİTİK YOL KONTROLÜ (BURADA EKLİYORUZ)
+        const isItemCritical = criticalPathIds.has(item.id);
 
         // 1. NORMAL BARLAR
         activeTimelineIds.forEach((timelineId) => {
@@ -312,8 +322,10 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
           baselineBarData: baselineBarData,
           dependencies: currentDependencies,
           primaryTimelineColumnId: currentBarData ? currentBarData.timelineColumnId : null,
-          externalLabel: externalLabel
-        });
+          externalLabel: externalLabel,
+          // YENİ: Veri setine ekle (Type hatası verirse GanttArrows.tsx'i güncellemelisin)
+          isCritical: isItemCritical
+        } as any);
 
         rowIndex = itemBaseRowIndex + (itemRowCount - 1);
       });
@@ -322,7 +334,7 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
   }, [
     groups, items, activeTimelineIds, viewMinDate, collapsedGroupIds,
     dayWidthPx, labelById, colorByColumnId, dependencyColumnId, allUsers, columns,
-    activeBaselineId // <-- DEPENDENCY EKLENDİ
+    activeBaselineId, criticalPathIds // <-- DEPENDENCY EKLENDİ
   ]);
 
   // ... geri kalan kodlar aynı ...
@@ -561,6 +573,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
                         onResizeHandleMouseDown={handleMouseDownOnResizeHandle}
                         onMouseEnter={() => handleBarMouseEnter(itemData.item.id)}
                         onMouseLeave={handleBarMouseLeave}
+                        // YENİ: Kritik ise true gönder
+                        isCritical={showCriticalPath && criticalPathIds.has(itemData.item.id)}
                       />
 
                       {previewItemData.barData && previewItemData.externalLabel && (
@@ -590,6 +604,8 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
           totalWidth={totalWidth}
           totalHeight={totalHeight}
           hoveredItemId={hoveredItemId}
+          showCriticalPath={showCriticalPath}
+          criticalPathIds={criticalPathIds}
         />
 
       </div>

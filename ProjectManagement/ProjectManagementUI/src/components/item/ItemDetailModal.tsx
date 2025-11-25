@@ -195,7 +195,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     }, [columns, item.itemValues]);
 
     return (
-        /* --- Modal içeriği: sol/ayırıcı/sağ düzeni (monday.com benzeri) --- */
+        /* --- Modal içeriği: sol/ayırıcı/sağ düzeni --- */
         <Modal isOpen={isOpen} onClose={onClose} title="" size="7xl" >
             <button
                 onClick={onClose}

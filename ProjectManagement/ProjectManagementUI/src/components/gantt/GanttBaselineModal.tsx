@@ -34,16 +34,18 @@ interface GanttBaselineModalProps {
 
     groups: Group[];
     items: Item[];
-    
-    zoomIndex: number; 
+
+    zoomIndex: number;
     onZoomIndexChange: (index: number) => void;
-    
+
     collapsedGroupIds: Set<number>;
     onToggleGroup: (groupId: number) => void;
 
     initialDate?: Date;
 
-    onDeleteBaseline?: (columnId: number) => void; 
+    onDeleteBaseline?: (columnId: number) => void;
+    showCriticalPath: boolean;
+    onToggleCriticalPath: (show: boolean) => void;
 }
 
 const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
@@ -69,7 +71,9 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
     collapsedGroupIds,
     onToggleGroup,
     initialDate,
-    onDeleteBaseline, 
+    onDeleteBaseline,
+    showCriticalPath,
+    onToggleCriticalPath,
 }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(true);
     const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
@@ -123,8 +127,8 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
         handleAutoFit
     } = useGanttTimeline({
         projectDateRange,
-        zoomIndex, 
-        onZoomIndexChange, 
+        zoomIndex,
+        onZoomIndexChange,
         rightPanelScrollRef: modalRightPanelScrollRef
     });
 
@@ -142,14 +146,14 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
     useEffect(() => {
         if (isOpen && !hasInitialScrolled.current) {
             const targetDate = initialDate || new Date();
-            
+
             // Modal animasyonu bitip DOM oturunca tek bir sefer scroll yap
             const timer = setTimeout(() => {
                 // 'auto' kullanıyoruz ki modal açılır açılmaz kullanıcı animasyon görmesin
                 scrollToDate(targetDate, 'center', 'auto');
                 hasInitialScrolled.current = true;
             }, 100);
-            
+
             return () => clearTimeout(timer);
         }
     }, [isOpen, scrollToDate, initialDate]);
@@ -208,6 +212,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                     hoveredItemId={hoveredItemId}
                                     columns={allColumns}
                                     activeTimelineIds={activeTimelineIds}
+
                                 />
                             </div>
                         </div>
@@ -243,6 +248,7 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                 onItemClick={() => { }}
                                 onMouseEnterBar={handleItemMouseEnter}
                                 onMouseLeaveBar={handleItemMouseLeave}
+                                showCriticalPath={showCriticalPath}
                             />
                         </div>
                     </div>
@@ -263,7 +269,9 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
                                 activeBaselineId={activeBaselineId}
                                 onBaselineChange={onBaselineChange}
                                 onCreateBaseline={onCreateBaseline}
-                                onDeleteBaseline={onDeleteBaseline || (() => {})}
+                                onDeleteBaseline={onDeleteBaseline || (() => { })}
+                                showCriticalPath={showCriticalPath}
+                                onToggleCriticalPath={onToggleCriticalPath}
                             />
                         </div>
                     )}

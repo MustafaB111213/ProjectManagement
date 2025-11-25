@@ -34,6 +34,7 @@ interface GanttBarRowProps {
     ) => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
+    isCritical?: boolean;
 }
 
 const _GanttBarRow: React.FC<GanttBarRowProps> = ({
@@ -45,12 +46,16 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
     onResizeHandleMouseDown,
     onMouseEnter,
     onMouseLeave,
+    isCritical = false
 }) => {
     const { barData, visualOnlyBars, baselineBarData } = itemData;
     const { barData: originalBarData } = originalItemData;
 
     const baseTop = itemData.rowIndex * GANTT_ROW_HEIGHT_PX;
-
+    
+    const criticalClass = isCritical 
+        ? 'ring-2 ring-red-500 ring-offset-1 shadow-[0_0_10px_rgba(239,68,68,0.6)] z-[15]' // Z-index artırıldı, kırmızı ring ve shadow eklendi
+        : '';
     // Helper: Date Badges
     const renderDateBadges = (bar: BarTimelineData, top: number) => {
         if (!isDragging) return null;
@@ -87,7 +92,7 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                         onMouseLeave={onMouseLeave}
                         onMouseDown={(e) => onBarMouseDown(e, itemData, barData.timelineColumnId)}
                         // Z-Index: Normal 11, Aktif 12. Baseline'ın bunun üstüne çıkması için Baseline'a daha yüksek veriyoruz.
-                        className={`rounded text-white text-xs px-2 flex items-center overflow-hidden absolute cursor-grab group ${barData.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
+                        className={`rounded text-white text-xs px-2 flex items-center ${criticalClass} overflow-hidden absolute cursor-grab group ${barData.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
                         style={{
                             ...barData.style,
                             position: 'absolute',

@@ -24,6 +24,7 @@ const STATUS_OPTIONS_CONFIG = [
     { id: 1, text: 'Tamamlandı', color: '#047857' },
     { id: 2, text: 'Takıldı', color: '#B91C1C' },
     { id: 3, text: 'Beklemede', color: '#1D4ED8' },
+    { id: 3, text: 'Planlandı', color: '#b9d81dff' },
     { id: 4, text: 'Belirsiz', color: '#374151' },
 ];
 const STATUS_CONFIG_MAP = new Map(STATUS_OPTIONS_CONFIG.map(opt => [opt.text, opt]));
@@ -59,10 +60,19 @@ const GanttView: React.FC<GanttViewProps> = ({
 
     const {
         activeTimelineIds, groupByColumnId, colorByColumnId, labelById, activeBaselineId,
-        setActiveTimelineIds, setGroupByColumnId, setColorByColumnId, setLabelById
+        setActiveTimelineIds, setGroupByColumnId, setColorByColumnId, setLabelById, showCriticalPath,
+        setShowCriticalPath
     } = settingsState;
 
-    const { handleTimelineColumnChange, handleGroupByColumnChange, handleColorByColumnChange, handleLabelByChange, handleBaselineChange, handleCreateBaseline, handleDeleteBaseline } = settingsHandlers;
+    const { handleTimelineColumnChange,
+        handleGroupByColumnChange,
+        handleColorByColumnChange,
+        handleLabelByChange,
+        handleBaselineChange,
+        handleCreateBaseline,
+        handleDeleteBaseline,
+        handleToggleCriticalPath
+    } = settingsHandlers;
 
     const rightPanelScrollRef = useRef<HTMLDivElement>(null);
     const leftPanelInnerRef = useRef<HTMLDivElement>(null);
@@ -257,8 +267,8 @@ const GanttView: React.FC<GanttViewProps> = ({
                         onItemClick={handleItemClick}
                         onMouseEnterBar={setHoveredItemId}
                         onMouseLeaveBar={() => setHoveredItemId(null)}
-                        // YENİ: Prop geçirildi
                         activeBaselineId={activeBaselineId}
+                        showCriticalPath={showCriticalPath}
                     />
                 </div>
             </div>
@@ -312,6 +322,8 @@ const GanttView: React.FC<GanttViewProps> = ({
 
                     // 3. Scroll Pozisyonu (Tarih)
                     initialDate={modalInitialDate}
+                    showCriticalPath={showCriticalPath}
+                    onToggleCriticalPath={handleToggleCriticalPath}
                 />
             )}
 

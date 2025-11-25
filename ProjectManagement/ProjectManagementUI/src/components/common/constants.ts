@@ -38,7 +38,7 @@ export const MAX_ZOOM_INDEX = ZOOM_STEPS.length - 1;
 
 // YENİ: Gantt Şeması için paylaşılan satır yüksekliği
 // Değeri buradan 36'dan 44'e yükselttik.
-export const GANTT_ROW_HEIGHT_PX = 50; 
+export const GANTT_ROW_HEIGHT_PX = 50;
 export const GANTT_BAR_HEIGHT_PX = 25; // Bu sabit kalabilir
 
 // Çubukların dikeyde ortalanması için hesaplama
@@ -53,5 +53,6 @@ export const STATUS_OPTIONS = [
     { text: 'Tamamlandı', classes: 'bg-green-100 text-green-800' },
     { text: 'Takıldı', classes: 'bg-red-100 text-red-800' },
     { text: 'Beklemede', classes: 'bg-blue-100 text-blue-800' },
+    { text: 'Planlandı', classes: 'bg-yellow-100 text-yellow-800' },
     { text: 'Belirsiz', classes: 'bg-gray-100 text-gray-800' },
 ];

@@ -21,6 +21,8 @@ interface GanttSettingsPanelProps {
     onBaselineChange: (columnId: number | null) => void;
     onCreateBaseline: () => void;
     onDeleteBaseline: (columnId: number) => void;
+    showCriticalPath: boolean;
+    onToggleCriticalPath: (show: boolean) => void;
 }
 
 const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
@@ -37,7 +39,9 @@ const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
     activeBaselineId,
     onBaselineChange,
     onCreateBaseline,
-    onDeleteBaseline
+    onDeleteBaseline,
+    showCriticalPath,
+    onToggleCriticalPath
 }) => {
 
     // 1. Ana Zaman Çizelgesi Seçenekleri (Tüm Timeline kolonları)
@@ -182,6 +186,24 @@ const GanttSettingsPanel: React.FC<GanttSettingsPanelProps> = ({
                                     {labelById === col.id && <FiCheck className="w-4 h-4" />}
                                 </button>
                             ))}
+                        </div>
+                    </CollapsibleStep>
+
+                    {/* YENİ BÖLÜM: Görünüm Seçenekleri */}
+                    <CollapsibleStep title="Görünüm Ayarları" isInitiallyOpen={true}>
+                        <div className="rounded-md border border-gray-200 bg-white overflow-hidden p-1">
+                            <button
+                                onClick={() => onToggleCriticalPath(!showCriticalPath)}
+                                className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors"
+                            >
+                                <div className="flex flex-col">
+                                    <span className="text-gray-700 font-medium">Kritik Yolu Göster</span>
+                                    <span className="text-xs text-gray-500">Proje süresini belirleyen görevleri vurgula</span>
+                                </div>
+                                <div className={`w-10 h-5 flex items-center rounded-full p-1 duration-300 ease-in-out ${showCriticalPath ? 'bg-red-500' : 'bg-gray-300'}`}>
+                                    <div className={`bg-white w-3 h-3 rounded-full shadow-md transform duration-300 ease-in-out ${showCriticalPath ? 'translate-x-5' : ''}`}></div>
+                                </div>
+                            </button>
                         </div>
                     </CollapsibleStep>
                     

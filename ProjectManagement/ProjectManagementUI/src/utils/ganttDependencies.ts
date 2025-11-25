@@ -2,7 +2,7 @@
 
 import { differenceInDays, parseISO, isValid, addDays, differenceInCalendarDays } from 'date-fns';
 // types.ts dosyanızın yoluna göre '..' sayısını ayarlamanız gerekebilir
-import { type Item, type DependencyLink, type DependencyType, type Column, ColumnType } from '../types';
+import { type Item, type DependencyLink, type Column, ColumnType } from '../types';
 
 // --- Yardımcı Tipler (Aynı) ---
 export interface UpdatedTaskData {
@@ -194,15 +194,15 @@ export const calculateCascadingChanges = (
     allItems: Item[],
     allColumns: Column[]
 ): UpdatedTaskData[] => {
-    
+
     const dependencyColumnId = allColumns.find(c => c.type === ColumnType.Dependency)?.id;
     const timelineColumnId = allColumns.find(c => c.type === ColumnType.Timeline)?.id;
 
     if (!dependencyColumnId || !timelineColumnId) return [];
 
     const updates: UpdatedTaskData[] = [];
-    const processedItems = new Set<number>(); 
-    
+    const processedItems = new Set<number>();
+
     // Kuyrukta hem yeni tarihleri hem de referans (eski) tarihleri tutuyoruz
     // Böylece ne kadar oynadığını (delta) hesaplayabiliriz.
     interface QueueItem {
@@ -216,7 +216,7 @@ export const calculateCascadingChanges = (
     // Root item'ın eski tarihlerini bul
     const rootItem = allItems.find(i => i.id === rootItemId);
     if (!rootItem) return [];
-    
+
     const rootVal = rootItem.itemValues.find(v => v.columnId === timelineColumnId)?.value;
     if (!rootVal) return [];
     const [rStartStr, rEndStr] = rootVal.split('/');
@@ -225,19 +225,19 @@ export const calculateCascadingChanges = (
 
     const queue: QueueItem[] = [];
 
-    queue.push({ 
-        id: rootItemId, 
-        newStart: rootNewStart, 
+    queue.push({
+        id: rootItemId,
+        newStart: rootNewStart,
         newEnd: rootNewEnd,
         oldStart: rootOldStart,
         oldEnd: rootOldEnd
     });
-    
+
     processedItems.add(rootItemId);
 
     while (queue.length > 0) {
         const current = queue.shift()!;
-        
+
         // Bu göreve bağlı ardılları bul
         const successors = allItems.filter(item => {
             if (item.id === current.id) return false;
@@ -255,18 +255,18 @@ export const calculateCascadingChanges = (
             // Ardılın MEVCUT (Eski) tarihlerini al
             const timelineVal = successor.itemValues.find(v => v.columnId === timelineColumnId)?.value;
             if (!timelineVal) continue;
-            
+
             const [succOldStartStr, succOldEndStr] = timelineVal.split('/');
             const succOldStart = parseISO(succOldStartStr);
             const succOldEnd = parseISO(succOldEndStr);
-            
+
             const duration = differenceInCalendarDays(succOldEnd, succOldStart);
 
             // Bağımlılık tipini bul
             const depVal = successor.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
             const links: DependencyLink[] = JSON.parse(depVal!);
             const linkToCurrent = links.find(l => l.id === current.id);
-            
+
             if (!linkToCurrent) continue;
 
             let moveDelta = 0;
@@ -276,25 +276,25 @@ export const calculateCascadingChanges = (
             // Bu sayede aradaki boşluk (Gap) ne ise o korunur.
 
             switch (linkToCurrent.type) {
-                case 'FS': 
+                case 'FS':
                     // Öncül Bitiş -> Ardıl Başlangıç
                     // Öncülün BİTİŞ tarihi ne kadar oynadı?
                     moveDelta = differenceInCalendarDays(current.newEnd, current.oldEnd);
                     break;
 
-                case 'SS': 
+                case 'SS':
                     // Öncül Başlangıç -> Ardıl Başlangıç
                     // Öncülün BAŞLANGIÇ tarihi ne kadar oynadı?
                     moveDelta = differenceInCalendarDays(current.newStart, current.oldStart);
                     break;
 
-                case 'FF': 
+                case 'FF':
                     // Öncül Bitiş -> Ardıl Bitiş
                     // Öncülün BİTİŞ tarihi ne kadar oynadı?
                     moveDelta = differenceInCalendarDays(current.newEnd, current.oldEnd);
                     break;
 
-                case 'SF': 
+                case 'SF':
                     // Öncül Başlangıç -> Ardıl Bitiş
                     // Öncülün BAŞLANGIÇ tarihi ne kadar oynadı?
                     moveDelta = differenceInCalendarDays(current.newStart, current.oldStart);
@@ -313,18 +313,191 @@ export const calculateCascadingChanges = (
                 });
 
                 // Zincirleme devam etsin diye kuyruğa ekle
-                queue.push({ 
-                    id: successor.id, 
-                    newStart: newSuccStart, 
+                queue.push({
+                    id: successor.id,
+                    newStart: newSuccStart,
                     newEnd: newSuccEnd,
                     oldStart: succOldStart, // Bir sonraki adım için referans
                     oldEnd: succOldEnd     // Bir sonraki adım için referans
                 });
-                
+
                 processedItems.add(successor.id);
             }
         }
     }
 
     return updates;
+};
+
+/**
+ * MONDAY.COM UYUMLU KRİTİK YOL ALGORİTMASI (Genişletilmiş Tolerans)
+ * * Bu algoritma Total Float (Bolluk) mantığını kullanır.
+ * Ancak hafta sonları ve gün geçişlerinin zinciri koparmaması için 
+ * tolerans aralığı genişletilmiştir (3 Gün).
+ */
+export const calculateCriticalPath = (
+    items: Item[], 
+    allColumns: Column[]
+): Set<number> => {
+    const criticalItemIds = new Set<number>();
+
+    const timelineColumnId = allColumns.find(c => c.type === ColumnType.Timeline)?.id;
+    const dependencyColumnId = allColumns.find(c => c.type === ColumnType.Dependency)?.id;
+
+    if (!timelineColumnId || !dependencyColumnId) return criticalItemIds;
+
+    // 1. Veri Yapısını Hazırla
+    interface Node {
+        id: number;
+        start: Date;     // Date objesi olarak tutuyoruz
+        end: Date;       // Date objesi
+        durationDays: number; 
+        successors: { id: number; type: string }[];
+    }
+
+    const nodes = new Map<number, Node>();
+    // Projenin en son bitiş tarihini Date objesi olarak tutalım
+    let projectEndDate: Date = new Date(0); 
+
+    // Node'ları oluştur
+    items.forEach(item => {
+        const tValue = item.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+        if (!tValue) return;
+
+        const [sStr, eStr] = tValue.split('/');
+        if (!sStr || !eStr) return;
+
+        const start = parseISO(sStr);
+        const end = parseISO(eStr);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+
+        // Projenin en son bitiş zamanını güncelle
+        if (end > projectEndDate) {
+            projectEndDate = end;
+        }
+
+        // Duration (Gün bazında +1 ekliyoruz çünkü Gantt'ta başlangıç ve bitiş dahildir)
+        // Örn: 1'inde başlayıp 1'inde biten iş 1 gündür. (1 - 1 = 0 olmamalı)
+        const duration = differenceInCalendarDays(end, start); 
+
+        nodes.set(item.id, {
+            id: item.id,
+            start,
+            end,
+            durationDays: duration,
+            successors: []
+        });
+    });
+
+    // Dependency Bağlarını Kur
+    items.forEach(item => { 
+        const dValue = item.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
+        if (!dValue) return;
+        try {
+            const links: DependencyLink[] = JSON.parse(dValue);
+            links.forEach(link => {
+                const predecessorNode = nodes.get(link.id);
+                if (predecessorNode) {
+                    predecessorNode.successors.push({ id: item.id, type: link.type });
+                }
+            });
+        } catch {}
+    });
+
+    // 2. Backward Pass (Geriye Doğru Hesaplama)
+    const lateFinishMap = new Map<number, Date>();
+    const processingSet = new Set<number>();
+
+    const getLateFinish = (nodeId: number): Date => {
+        if (lateFinishMap.has(nodeId)) return lateFinishMap.get(nodeId)!;
+        if (processingSet.has(nodeId)) return projectEndDate;
+        
+        processingSet.add(nodeId);
+        
+        const node = nodes.get(nodeId);
+        if (!node) {
+            processingSet.delete(nodeId);
+            return projectEndDate;
+        }
+
+        // Ardılı yoksa Late Finish = Proje Bitiş Tarihi
+        if (node.successors.length === 0) {
+            lateFinishMap.set(nodeId, projectEndDate);
+            processingSet.delete(nodeId);
+            return projectEndDate;
+        }
+
+        // Min Late Finish hesapla
+        // Başlangıçta çok uzak bir tarih atıyoruz
+        let minLateFinish = new Date(8640000000000000); // Max Date
+
+        node.successors.forEach(succ => {
+            const succNode = nodes.get(succ.id);
+            if (!succNode) return;
+
+            const succLF = getLateFinish(succ.id);
+            // Successor Late Start = Successor Late Finish - Duration
+            const succLS = addDays(succLF, -succNode.durationDays);
+
+            let constraintLF = minLateFinish;
+
+            switch (succ.type) {
+                case 'FS': 
+                    // Bizim LF <= Ardıl LS
+                    constraintLF = succLS; 
+                    break;
+                case 'SS': 
+                    // Bizim LF <= Ardıl LS + Duration
+                    constraintLF = addDays(succLS, node.durationDays);
+                    break;
+                case 'FF': 
+                    // Bizim LF <= Ardıl LF
+                    constraintLF = succLF;
+                    break;
+                case 'SF': 
+                    // Bizim LF <= Ardıl LF + Duration
+                    constraintLF = addDays(succLF, node.durationDays);
+                    break;
+                default: 
+                    constraintLF = succLS;
+            }
+
+            if (constraintLF < minLateFinish) {
+                minLateFinish = constraintLF;
+            }
+        });
+
+        // Eğer tarih değişmediyse (constraint yoksa) proje sonunu al
+        if (minLateFinish.getTime() === 8640000000000000) {
+             minLateFinish = projectEndDate;
+        }
+
+        lateFinishMap.set(nodeId, minLateFinish);
+        processingSet.delete(nodeId);
+        return minLateFinish;
+    };
+
+    // 3. Float Hesapla ve Tolerans Kontrolü
+    
+    // MONDAY.COM DAVRANIŞI İÇİN KRİTİK AYAR:
+    // Toleransı 3 gün (veya 4 gün) olarak belirliyoruz.
+    // Bu sayede Cuma biten -> Pazartesi başlayan görevler (arada 2 gün boşluk olsa da)
+    // zinciri koparmaz ve kırmızı kalır.
+    const FLOAT_TOLERANCE_DAYS = 3; 
+
+    nodes.forEach(node => {
+        const lateFinish = getLateFinish(node.id);
+        
+        // Float = Late Finish - Early Finish (Mevcut Bitiş)
+        const floatDays = differenceInCalendarDays(lateFinish, node.end);
+        
+        // Eğer bolluk 3 günden azsa, bu görev kritiktir.
+        // (Haftasonu boşluklarını yutmak için)
+        if (floatDays <= FLOAT_TOLERANCE_DAYS) {
+            criticalItemIds.add(node.id);
+        }
+    });
+
+    return criticalItemIds;
 };

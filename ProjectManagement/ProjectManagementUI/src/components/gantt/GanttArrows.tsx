@@ -32,7 +32,7 @@ export interface ProcessedItemData {
     rowIndex: number;
     rowSpan: number;
     barData: BarTimelineData | null; // Birincil (Aktif) Bar
-    
+
     // YENİ: Temel Çizgi (Baseline) Barı
     // Eğer null ise o satır için baseline yok demektir.
     baselineBarData: BarTimelineData | null;
@@ -53,6 +53,8 @@ interface GanttArrowsProps {
     totalWidth: number;
     totalHeight: number;
     hoveredItemId: number | null;
+    showCriticalPath?: boolean;
+    criticalPathIds?: Set<number>;
 }
 
 // --- HESAPLAMA HOOK'U (Değişiklik Yok) ---
@@ -94,7 +96,7 @@ const useCalculateArrows = (processedData: Map<number, ProcessedItemData>): Arro
                     case 'SF': startX = predBar.startX - hBuffer; endX = succBar.endX + hBuffer + MARKER_WIDTH; break;
                     case 'FS': default: startX = predBar.endX + hBuffer; endX = succBar.startX - hBuffer - MARKER_WIDTH; break;
                 }
-                
+
                 const startY = predBaseY + GANTT_ARROW_VERTICAL_MID_OFFSET;
                 const endY = succBaseY + GANTT_ARROW_VERTICAL_MID_OFFSET;
 
@@ -135,10 +137,18 @@ const useCalculateArrows = (processedData: Map<number, ProcessedItemData>): Arro
 };
 
 // GanttArrows Bileşeni
-const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, totalHeight, hoveredItemId }) => {
+const GanttArrows: React.FC<GanttArrowsProps> = ({
+    processedData,
+    totalWidth,
+    totalHeight,
+    hoveredItemId,
+    showCriticalPath = false,
+    criticalPathIds = new Set()
+}) => {
     const arrows = useCalculateArrows(processedData);
     const defaultColor = '#A0AEC0';
     const highlightColor = '#071b2eff';
+    const criticalColor = '#ef4444'; // Tailwind Red-500
 
     const arrowHighlightMap = useMemo(() => {
         const map = new Map<string, boolean>();
@@ -155,9 +165,6 @@ const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, to
         return map;
     }, [hoveredItemId, processedData]);
 
-    const normalArrows = arrows.filter(a => !arrowHighlightMap.get(a.id));
-    const highlightedArrows = arrows.filter(a => arrowHighlightMap.get(a.id));
-
     return (
         <svg width={totalWidth} height={totalHeight} className="absolute top-0 left-0 pointer-events-none" style={{ zIndex: 10 }}>
             <defs>
@@ -167,15 +174,61 @@ const GanttArrows: React.FC<GanttArrowsProps> = ({ processedData, totalWidth, to
                 <marker id="arrowhead-highlight" markerWidth={MARKER_WIDTH} markerHeight="6" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
                     <polygon points="0 0, 8 3, 0 6" fill={highlightColor} />
                 </marker>
+                {/* YENİ: Kritik Yol Marker'ı */}
+                <marker id="arrowhead-critical" markerWidth={MARKER_WIDTH} markerHeight="6" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <polygon points="0 0, 8 3, 0 6" fill={criticalColor} />
+                </marker>
             </defs>
-            {normalArrows.map(arrow => (
-                <path key={arrow.id} d={arrow.path} fill="none" stroke={defaultColor} strokeWidth="1.5" markerEnd="url(#arrowhead-default)" />
-            ))}
-            {highlightedArrows.map(arrow => (
-                <path key={arrow.id} d={arrow.path} fill="none" stroke={highlightColor} strokeWidth="1.5" markerEnd="url(#arrowhead-highlight)" />
-            ))}
+
+            {arrows.map(arrow => {
+                // ID formatı: `arrow-${link.id}-${succId}-${link.type}`
+                // link.id = Predecessor (Öncül)
+                // succId = Successor (Ardıl)
+                const parts = arrow.id.split('-');
+                const predId = parseInt(parts[1]);
+                const succId = parseInt(parts[2]);
+
+                const isHovered = arrowHighlightMap.get(arrow.id);
+                
+                // Okun KRİTİK olması için:
+                // 1. Kritik yol modu açık olmalı
+                // 2. HER İKİ görev de kritik yolda olmalı
+                // (Not: Tam CPM'de slack kontrolü yapılır ama bu görselleştirme için yeterlidir)
+                const isCritical = showCriticalPath && criticalPathIds.has(predId) && criticalPathIds.has(succId);
+
+                let stroke = defaultColor;
+                let marker = "url(#arrowhead-default)";
+                let strokeWidth = "1.5";
+                let zIndex = 0; // SVG içinde z-index sırayla çalışır, sona atılan üste çıkar
+
+                if (isCritical) {
+                    stroke = criticalColor;
+                    marker = "url(#arrowhead-critical)";
+                    strokeWidth = "2"; // Kritik oklar biraz daha kalın
+                }
+
+                if (isHovered) {
+                    stroke = highlightColor;
+                    marker = "url(#arrowhead-highlight)";
+                    strokeWidth = "2.5";
+                }
+                
+                // Kritik veya Hover olanları listenin sonuna atmak render sırası için iyidir ama map içinde zor.
+                // Sadece rengi değiştiriyoruz.
+
+                return (
+                    <path 
+                        key={arrow.id} 
+                        d={arrow.path} 
+                        fill="none" 
+                        stroke={stroke} 
+                        strokeWidth={strokeWidth} 
+                        markerEnd={marker} 
+                        className="transition-colors duration-300"
+                    />
+                );
+            })}
         </svg>
     );
 };
-
 export default GanttArrows;

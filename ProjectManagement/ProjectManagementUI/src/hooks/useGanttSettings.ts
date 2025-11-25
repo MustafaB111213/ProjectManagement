@@ -15,8 +15,9 @@ interface GanttSettings {
     groupByColumnId?: number | null;
     colorByColumnId?: number | null;
     labelById?: number | null;
-    // YENİ: Aktif olarak görüntülenen temel çizgi kolonunun ID'si
+    // Aktif olarak görüntülenen temel çizgi kolonunun ID'si
     activeBaselineId?: number | null;
+    showCriticalPath?: boolean;
 }
 
 export const useGanttSettings = (
@@ -25,7 +26,7 @@ export const useGanttSettings = (
     viewId: number,
     allColumns: Column[],
     columnStatus: 'idle' | 'loading' | 'succeeded' | 'failed',
-    items: Item[] // YENİ: Veri kopyalama işlemi için item'lara ihtiyacımız var
+    items: Item[] // Veri kopyalama işlemi için item'lara ihtiyacımız var
 ) => {
     const dispatch = useAppDispatch();
 
@@ -51,6 +52,7 @@ export const useGanttSettings = (
         return [];
     }, [allColumns, columnStatus, settings.activeTimelineIds]);
 
+    const initialShowCriticalPath = settings.showCriticalPath ?? false;
     const initialGroupByColumnId = settings.groupByColumnId ?? null;
     const initialColorByColumnId = useMemo(() => {
         // Eğer ayar varsa (null dahil) onu kullan
@@ -64,7 +66,7 @@ export const useGanttSettings = (
         return null;
     }, [settings.colorByColumnId]); const initialLabelById = settings.labelById ?? null;
 
-    // YENİ: Baseline Initial
+    // Baseline Initial
     const initialActiveBaselineId = settings.activeBaselineId ?? null;
 
     // 3. State'ler
@@ -72,7 +74,9 @@ export const useGanttSettings = (
     const [groupByColumnId, setGroupByColumnId] = useState<number | null>(initialGroupByColumnId);
     const [colorByColumnId, setColorByColumnId] = useState<number | null>(initialColorByColumnId);
     const [labelById, setLabelById] = useState<number | null>(initialLabelById);
-    // YENİ: Baseline State
+    const [showCriticalPath, setShowCriticalPath] = useState<boolean>(initialShowCriticalPath); 
+
+    // Baseline State
     const [activeBaselineId, setActiveBaselineId] = useState<number | null>(initialActiveBaselineId);
 
     // 4. Senkronizasyon (Settings değişirse state'i güncelle)
@@ -92,11 +96,14 @@ export const useGanttSettings = (
         if (labelById !== initialLabelById) setLabelById(initialLabelById);
     }, [initialLabelById]);
 
-    // YENİ: Baseline Senkronizasyon
+    // Baseline Senkronizasyon
     useEffect(() => {
         if (activeBaselineId !== initialActiveBaselineId) setActiveBaselineId(initialActiveBaselineId);
     }, [initialActiveBaselineId]);
 
+    useEffect(() => {
+        if (showCriticalPath !== initialShowCriticalPath) setShowCriticalPath(initialShowCriticalPath);
+    }, [initialShowCriticalPath]);
 
     // 5. Kaydetme Handler'ı (Generic)
     const updateSettings = useCallback((newPartialSettings: Partial<GanttSettings>) => {
@@ -106,6 +113,7 @@ export const useGanttSettings = (
             colorByColumnId,
             labelById,
             activeBaselineId,
+            showCriticalPath,
             ...newPartialSettings
         };
 
@@ -114,7 +122,7 @@ export const useGanttSettings = (
             viewId,
             payload: { settingsJson: JSON.stringify(newSettings) }
         }));
-    }, [dispatch, boardId, viewId, activeTimelineIds, groupByColumnId, colorByColumnId, labelById, activeBaselineId]);
+    }, [dispatch, boardId, viewId, activeTimelineIds, groupByColumnId, colorByColumnId, labelById, activeBaselineId, showCriticalPath]);
 
     // Spesifik Handler'lar
     const handleTimelineColumnChange = (ids: number[]) => {
@@ -133,13 +141,17 @@ export const useGanttSettings = (
         setLabelById(id);
         updateSettings({ labelById: id });
     };
-    // YENİ: Baseline Değişimi
+    // Baseline Değişimi
     const handleBaselineChange = (id: number | null) => {
         setActiveBaselineId(id);
         updateSettings({ activeBaselineId: id });
     };
 
-    // YENİ: YENİ TEMEL ÇİZGİ OLUŞTURMA MANTIĞI
+    const handleToggleCriticalPath = (show: boolean) => {
+        setShowCriticalPath(show);
+        updateSettings({ showCriticalPath: show });
+    };
+    // YENİ TEMEL ÇİZGİ OLUŞTURMA MANTIĞI
     const handleCreateBaseline = async () => {
         if (activeTimelineIds.length === 0) {
             alert("Lütfen önce bir kaynak zaman çizelgesi seçin.");
@@ -228,7 +240,9 @@ export const useGanttSettings = (
             setGroupByColumnId,
             setColorByColumnId,
             setLabelById,
-            setActiveBaselineId
+            setActiveBaselineId,
+            showCriticalPath,
+            setShowCriticalPath
         },
         settingsHandlers: {
             handleTimelineColumnChange,
@@ -237,7 +251,8 @@ export const useGanttSettings = (
             handleLabelByChange,
             handleBaselineChange,
             handleCreateBaseline,
-            handleDeleteBaseline
+            handleDeleteBaseline,
+            handleToggleCriticalPath
         }
     };
 };
