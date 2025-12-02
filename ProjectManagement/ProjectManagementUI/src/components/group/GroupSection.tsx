@@ -1,7 +1,7 @@
 // src/components/group/GroupSection.tsx
 
 import React, { useMemo, useState } from 'react';
-import type { Group, Column } from '../../types';
+import { type Group, type Column, ColumnType } from '../../types';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { createItem, makeSelectItemsByGroup } from '../../store/features/itemSlice';
 import { deleteGroup } from '../../store/features/groupSlice';
@@ -10,6 +10,7 @@ import { deleteColumn } from '../../store/features/columnSlice';
 // dnd-kit
 import { useSortable, SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useDroppable } from '@dnd-kit/core'; // Droppable importu
 
 // Componentler
 import ItemRow from '../item/ItemRow';
@@ -18,20 +19,17 @@ import AddColumnForm from '../column/AddColumnForm';
 import EditGroupForm from './EditGroupForm';
 import EditColumnForm from '../column/EditColumnForm';
 import { FiPlus, FiEdit, FiTrash2, FiChevronRight, FiChevronDown, FiGrid } from 'react-icons/fi';
-import { useDroppable } from '@dnd-kit/core';
+import { selectShowOnlyCompleted } from '../../store/features/boardViewSlice';
 
-// 1. SortableColumnHeader'a 'groupId' prop'u ekliyoruz
+// 1. SortableColumnHeader (Değişiklik yok)
 const SortableColumnHeader = ({ column, groupId, openEdit, deleteCol }: { column: Column, groupId: number, openEdit: any, deleteCol: any }) => {
-
-    // 2. BENZERSİZ ID OLUŞTURMA: ID artık gruba özel
     const uniqueId = `group-${groupId}-column-${column.id}`;
-
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: uniqueId,
         data: {
             type: 'COLUMN',
-            column, // Column verisini taşıyoruz
-            groupId // Hangi gruptan sürüklendiği bilgisi (gerekirse)
+            column,
+            groupId
         }
     });
 
@@ -65,18 +63,21 @@ interface GroupSectionProps {
     group: Group;
     isCollapsed: boolean;
     onToggleCollapse: () => void;
-    isOverlay?: boolean; // Overlay için
+    isOverlay?: boolean;
 }
 
 const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggleCollapse, isOverlay }) => {
     const dispatch = useAppDispatch();
     const { selectedBoardId } = useAppSelector((state) => state.boards);
 
-    // --- DND-KIT: Grup Sürükleme ---
+    // Filtre durumunu çek
+    const showOnlyCompleted = useAppSelector(selectShowOnlyCompleted);
+    
+    // --- DND-KIT: Grup Sürükleme (Sortable) ---
     const {
         attributes,
         listeners,
-        setNodeRef,
+        setNodeRef, // Sortable Ref
         transform,
         transition,
         isDragging
@@ -92,14 +93,13 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
         position: 'relative' as 'relative',
         zIndex: isDragging ? 999 : 'auto',
     };
-    // --------------------------------
-    // --- YENİ KOD BAŞLANGICI: Grubun Gövdesi için Droppable ---
-    // Bu kısım, item'ları boş bir gruba veya listenin altına sürüklemek için gereklidir.
+    
+    // --- DND-KIT: Grup İçine Bırakma (Droppable) ---
+    // Bu, item'ları boş bir gruba veya listenin altına sürüklemek için gereklidir.
     const { setNodeRef: setDroppableNodeRef } = useDroppable({
-        id: `group-container-${group.id}`, // Benzersiz bir ID veriyoruz
+        id: `group-container-${group.id}`,
         data: { type: 'CONTAINER', groupId: group.id }
     });
-    // --- YENİ KOD SONU ---
 
     const [newItemName, setNewItemName] = useState('');
     const [isColumnModalOpen, setColumnModalOpen] = useState(false);
@@ -108,13 +108,34 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
 
     // Selector
     const selectItemsForGroup = useMemo(makeSelectItemsByGroup, []);
-    const items = useAppSelector(state => selectItemsForGroup(state, group.id));
+    
+    // DÜZELTME 1: Değişken adını 'allItems' yaptık (Filtre mantığı ile uyumlu olması için)
+    const allItems = useAppSelector(state => selectItemsForGroup(state, group.id));
+    
     const columns = useAppSelector((state) => state.columns.items);
 
-    // DND-KIT için ID listeleri
-    const itemIds = useMemo(() => items.map(i => `item-${i.id}`), [items]);
-    // 3. Sütun ID listesini de benzersiz formata çeviriyoruz
-    // Bu liste SortableContext için gerekli
+    // DÜZELTME 2: 'displayedItems' hesaplamasını 'itemIds'den ÖNCEYE aldık.
+    // --- FİLTRELEME MANTIĞI ---
+    const displayedItems = useMemo(() => {
+        // Eğer filtre kapalıysa hepsini göster
+        if (!showOnlyCompleted) return allItems;
+
+        // Statü kolonunu bul
+        const statusColumn = columns.find(c => c.type === ColumnType.Status);
+        
+        // Eğer statü kolonu yoksa filtreleme yapamaz, hepsini döndür
+        if (!statusColumn) return allItems;
+
+        // Sadece "Tamamlandı" olanları filtrele
+        return allItems.filter(item => {
+            const statusVal = item.itemValues.find(v => v.columnId === statusColumn.id)?.value;
+            return statusVal === 'Tamamlandı' || statusVal === 'Done'; 
+        });
+    }, [allItems, showOnlyCompleted, columns]);
+
+    // DND-KIT için ID listeleri (Artık displayedItems tanımlı olduğu için hata vermez)
+    const itemIds = useMemo(() => displayedItems.map(i => `item-${i.id}`), [displayedItems]);
+    
     const columnIds = useMemo(() =>
         columns.map(c => `group-${group.id}-column-${c.id}`),
         [columns, group.id]);
@@ -131,14 +152,14 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
     };
 
     const handleDeleteGroup = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Tutamaç değil butona basıldı
+        e.stopPropagation();
         if (window.confirm(`"${group.title}" grubunu silmek istediğinizden emin misiniz?`)) {
             if (selectedBoardId) dispatch(deleteGroup({ boardId: selectedBoardId, groupId: group.id }));
         }
     };
 
     const handleDeleteColumn = (e: React.MouseEvent, columnId: number, columnName: string) => {
-        e.preventDefault(); // Sürüklemeyi engelle
+        e.preventDefault();
         e.stopPropagation();
         if (window.confirm(`"${columnName}" sütununu silmek istediğinizden emin misiniz?`)) {
             if (selectedBoardId) dispatch(deleteColumn({ boardId: selectedBoardId, columnId }));
@@ -154,14 +175,14 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
     return (
         <>
             <section
-                ref={setNodeRef}
+                ref={setNodeRef} // Sortable Ref'i (Grup sıralaması için)
                 style={groupStyle}
                 className={`mb-6 ${isOverlay ? 'bg-white shadow-2xl rounded-lg border-2 border-blue-400 p-2' : ''}`}
             >
                 {/* Grup Başlığı */}
                 <div className="group flex items-center justify-between mb-2 px-1">
                     <div className="flex items-center gap-x-2 flex-grow min-w-0">
-                        {/* GRUP SÜRÜKLEME TUTAMACI (Handle) */}
+                        {/* GRUP SÜRÜKLEME TUTAMACI */}
                         <div {...attributes} {...listeners} className="cursor-grab text-gray-300 hover:text-gray-600">
                             <FiGrid size={16} />
                         </div>
@@ -173,7 +194,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
                         <h3 className="text-base font-semibold truncate cursor-pointer" style={{ color: group.color }} onClick={onToggleCollapse}>
                             {group.title}
                         </h3>
-                        <span className="text-xs font-medium text-gray-400">({items.length} Görev)</span>
+                        <span className="text-xs font-medium text-gray-400">({itemIds.length} Görev)</span>
                     </div>
 
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -193,13 +214,12 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
                                     <div className="sticky left-0 z-20 bg-gray-50 px-4 py-2 border-r border-gray-200 h-10 flex items-center"></div>
                                     <div className="sticky z-20 bg-gray-50 px-2 py-2 border-r border-gray-200 h-10 flex items-center" style={{ left: '60px' }}>Görev Adı</div>
 
-                                    {/* 4. Strategy ve Items burada güncellendi */}
                                     <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
                                         {columns.map((col) => (
                                             <SortableColumnHeader
                                                 key={col.id}
                                                 column={col}
-                                                groupId={group.id} // <-- groupId'yi prop olarak geçiyoruz
+                                                groupId={group.id}
                                                 openEdit={openEditColumnModal}
                                                 deleteCol={handleDeleteColumn}
                                             />
@@ -214,44 +234,84 @@ const GroupSection: React.FC<GroupSectionProps> = ({ group, isCollapsed, onToggl
                                 </div>
 
                                 {/* --- ITEM LİSTESİ --- */}
-                                {/* Context'i burada başlatıyoruz, böylece ItemRow'lar useSortable kullanabilir */}
-                                <div className="bg-white">
+                                {/* DÜZELTME 3: Droppable Ref'i buraya veriyoruz. Item'lar buraya bırakılacak. */}
+                                <div className="bg-white" ref={setDroppableNodeRef}>
                                     <SortableContext id={`group-${group.id}-items`} items={itemIds} strategy={verticalListSortingStrategy}>
-                                        {items.map((item) => (
-                                            <ItemRow
-                                                key={item.id}
-                                                item={item}
-                                                color={group.color}
-                                                columns={columns}
-                                                gridTemplateColumns={gridTemplateColumns}
-                                                boardId={selectedBoardId || 0}
-                                            />
-                                        ))}
+                                        {displayedItems.length > 0 ? (
+                                            displayedItems.map((item) => (
+                                                <ItemRow
+                                                    key={item.id}
+                                                    item={item}
+                                                    color={group.color}
+                                                    columns={columns}
+                                                    gridTemplateColumns={gridTemplateColumns}
+                                                    boardId={selectedBoardId || 0}
+                                                />
+                                            ))
+                                        ) : (
+                                            // Liste boşsa veya filtrelenmişse bilgilendirme
+                                            <div className="p-4 text-center text-sm text-gray-400 italic">
+                                                {showOnlyCompleted 
+                                                    ? "Bu grupta tamamlanan görev yok." 
+                                                    : "Henüz görev eklenmemiş. Sürükleyip bırakabilirsiniz."}
+                                            </div>
+                                        )}
                                     </SortableContext>
                                 </div>
 
                                 {/* Yeni Görev Ekleme */}
-                                <div className="grid items-center border-t border-gray-200" style={{ gridTemplateColumns }}>
-                                    {/* (Tasarım aynı kalıyor, sadece form kodunu kopyaladım) */}
+                                <div
+                                    className="grid items-center border-t border-gray-200"
+                                    style={{ gridTemplateColumns }}
+                                >
+                                    {/* Sol renk + checkbox */}
                                     <div className="sticky left-0 z-10 bg-white relative border-r border-gray-200 h-10">
-                                        <div className="absolute top-0 left-0 bottom-0 w-1" style={{ backgroundColor: group.color }}></div>
-                                        <div className="px-4 h-full flex items-center"><input type="checkbox" className="h-4 w-4 invisible" /></div>
+                                        <div
+                                            className="absolute top-0 left-0 bottom-0 w-1"
+                                            style={{ backgroundColor: group.color }}
+                                        ></div>
+                                        <div className="px-4 h-full flex items-center">
+                                            <input type="checkbox" className="h-4 w-4 invisible" />
+                                        </div>
                                     </div>
-                                    <div className="sticky z-10 bg-white border-r border-gray-200 h-10" style={{ left: '60px' }}>
-                                        <form onSubmit={handleAddItem} className="h-full">
-                                            <input type="text" placeholder="+ Yeni görev ekle" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="w-full h-full bg-transparent outline-none px-2 text-sm" />
+
+                                    {/* Yeni görev ekle input + + butonu */}
+                                    <div
+                                        className="sticky z-10 bg-white border-r border-gray-200 h-10"
+                                        style={{ left: '60px' }}
+                                    >
+                                        <form onSubmit={handleAddItem} className="relative h-full">
+                                            <input
+                                                type="text"
+                                                placeholder="Yeni görev ekle"
+                                                value={newItemName}
+                                                onChange={(e) => setNewItemName(e.target.value)}
+                                                className="w-full h-full bg-transparent outline-none pl-2 pr-8 text-sm"
+                                            />
+                                            <button
+                                                type="submit"
+                                                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded hover:bg-gray-100 transition"
+                                                title="Görev Ekle"
+                                            >
+                                                <span className="text-lg leading-none text-gray-500">+</span>
+                                            </button>
                                         </form>
                                     </div>
-                                    {columns.map(col => <div key={`footer-${col.id}`} className="border-r border-gray-200 h-10"></div>)}
+
+                                    {/* Diğer kolonlar için boş hücreler */}
+                                    {columns.map(col => (
+                                        <div key={`footer-${col.id}`} className="border-r border-gray-200 h-10"></div>
+                                    ))}
                                     <div className="h-10"></div>
                                 </div>
+
                             </div>
                         </div>
                     </div>
                 )}
             </section>
 
-            {/* Modal Render'ları (Aynı kalıyor) */}
+            {/* Modal Render'ları */}
             {selectedBoardId && (
                 <>
                     <Modal isOpen={isColumnModalOpen} onClose={() => setColumnModalOpen(false)} title="Yeni Sütun Ekle"><AddColumnForm boardId={selectedBoardId} onClose={() => setColumnModalOpen(false)} /></Modal>

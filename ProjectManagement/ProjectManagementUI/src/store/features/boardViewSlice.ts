@@ -35,6 +35,8 @@ interface BoardViewState {
     activeViewId: number | null; // ID'ler artık number
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
     error: string | null;
+    // YENİ: Tamamlananları filtreleme durumu
+    showOnlyCompleted: boolean;
 }
 
 const initialState: BoardViewState = {
@@ -42,6 +44,8 @@ const initialState: BoardViewState = {
     activeViewId: null,
     status: 'idle',
     error: null,
+    // YENİ: Varsayılan olarak kapalı (Tüm görevler görünür)
+    showOnlyCompleted: false,
 };
 
 // --- Async Thunks ---
@@ -236,6 +240,10 @@ const boardViewSlice = createSlice({
             state.activeViewId = null;
             state.status = 'idle';
             state.error = null;
+        },
+        // YENİ: Filtreyi aç/kapa
+        toggleShowOnlyCompleted: (state) => {
+            state.showOnlyCompleted = !state.showOnlyCompleted;
         }
     },
     extraReducers: (builder) => {
@@ -336,13 +344,14 @@ const boardViewSlice = createSlice({
 });
 
 // --- Actions ---
-export const { setActiveViewId, clearBoardViews } = boardViewSlice.actions;
+export const { setActiveViewId, clearBoardViews, toggleShowOnlyCompleted } = boardViewSlice.actions;
 
 // --- Selectors ---
 export const selectBoardViews = (state: RootState) => state.boardViews.views;
 export const selectActiveViewId = (state: RootState) => state.boardViews.activeViewId;
 export const selectBoardViewStatus = (state: RootState) => state.boardViews.status;
 export const selectBoardViewError = (state: RootState) => state.boardViews.error;
+export const selectShowOnlyCompleted = (state: RootState) => state.boardViews.showOnlyCompleted;
 
 // Aktif görünüm nesnesini döndüren selector (useMemo gibi çalışır)
 export const selectActiveView = createSelector(

@@ -150,7 +150,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
                 const daysInView = end >= start ? differenceInCalendarDays(end, start) + 1 : 0;
                 
                 // İstenen format: "Ay (Çeyrek)" -> "Ocak (Ç1)"
-                const name = format(monthStart, 'MMMM (YYY)', { locale: tr });
+                const name = format(monthStart, 'MMMM (yyy)', { locale: tr });
                 
                 return {
                     key: `top-m-${monthStart.toISOString()}`,
