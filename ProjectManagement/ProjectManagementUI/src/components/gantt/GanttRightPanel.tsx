@@ -138,12 +138,21 @@ const GanttRightPanel: React.FC<GanttRightPanelProps> = ({
     let rowIndex = -1;
     const groupMap = new Map(groups.map(g => [g.id, g]));
 
+    // Önemli: items dizisi zaten GanttView'den hiyerarşik sıralı geliyor.
+    // Tekrar gruplayıp sıralamaya gerek yok, sadece sırayla işlemeliyiz.
+    // ANCAK: Grupları collapse/expand yapabilmek için grup bazlı iterasyon şart.
+    // items zaten grup sırasına göre de dizili geldiği için (GanttView'de yaptık),
+    // aşağıdaki mantık doğru çalışır.
+
     groups.forEach(group => {
       if (collapsedGroupIds.has(group.id)) return;
 
+      // Grup başlığı için 1 satır atla (Header row)
       rowIndex++;
+
+      // Sadece bu gruba ait itemları al (Sırayı bozmadan, filter kullanarak)
+      // items dizisi zaten "Grup A [Root, Child, Child], Grup B [Root...]" şeklinde sıralı.
       const groupItems = items.filter(item => item.groupId === group.id);
-      groupItems.sort((a, b) => a.order - b.order);
 
       groupItems.forEach(item => {
         const itemBaseRowIndex = rowIndex + 1;

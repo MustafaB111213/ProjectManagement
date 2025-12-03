@@ -22,6 +22,12 @@ namespace ProjectManagement.Data.Configurations
                    .WithOne(iv => iv.Item)
                    .HasForeignKey(iv => iv.ItemId)
                    .OnDelete(DeleteBehavior.Cascade);
+
+            // --- Alt görev hiyerarşisi ---
+            builder.HasOne(i => i.ParentItem)
+                   .WithMany(i => i.Children)
+                   .HasForeignKey(i => i.ParentItemId)
+                   .OnDelete(DeleteBehavior.ClientCascade);
         }
     }
 }

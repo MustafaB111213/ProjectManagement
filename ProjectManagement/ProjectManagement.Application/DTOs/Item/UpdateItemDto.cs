@@ -2,6 +2,6 @@
 {
     public class UpdateItemDto : ItemForManipulationDto
     {
-
+        public int? ParentItemId { get; set; }
     }
 }

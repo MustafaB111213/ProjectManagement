@@ -15,5 +15,7 @@ namespace ProjectManagement.Domain.Interfaces
 
         // Belirli bir board'a ait TÜM item'ları getirir (opsiyonel).
         Task<IEnumerable<Item>> GetAllByBoardIdAsync(int boardId);
+
+
     }
 }

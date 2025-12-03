@@ -13,5 +13,6 @@ namespace ProjectManagement.Application.DTOs.Item
         [Required]
         [Range(0, int.MaxValue)] // Index negatif olamaz
         public int DestinationIndex { get; set; } // Hedef gruptaki yeni sırası (0'dan başlar)
+        public int? ParentItemId { get; set; }
     }
 }

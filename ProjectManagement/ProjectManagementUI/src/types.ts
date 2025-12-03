@@ -31,6 +31,10 @@ export interface Item {
     groupId: number;
     itemValues: ItemValue[]; 
     order: number;
+    parentItemId: number | null;
+}
+export interface ItemTree extends Item {
+    children: ItemTree[];
 }
 
 // ColumnType enum'ı

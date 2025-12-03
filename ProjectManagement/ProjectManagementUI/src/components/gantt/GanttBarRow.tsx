@@ -11,13 +11,8 @@ import {
 
 // Sabitler
 const RESIZE_HANDLE_WIDTH_PX = 8;
-// Baseline Ayarları
-const BASELINE_HEIGHT_PX = 8; // Daha ince bir çizgi
-// Ana barın tam ortasına hizalamak için offset hesaplaması:
-// (Bar Yüksekliği - Baseline Yüksekliği) / 2 + Barın Tepesi
+const BASELINE_HEIGHT_PX = 8; 
 const BASELINE_CENTER_OFFSET = (GANTT_BAR_HEIGHT_PX - BASELINE_HEIGHT_PX) / 20;
-
-// YENİ: Baseline'ın nokta gibi görünmemesi için minimum genişlik (örneğin 6px veya 8px)
 const MIN_BASELINE_WIDTH_PX = 16;
 
 interface GanttBarRowProps {
@@ -53,10 +48,20 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
 
     const baseTop = itemData.rowIndex * GANTT_ROW_HEIGHT_PX;
     
+    // 🔴 GÖRSEL KİLİT KONTROLÜ
+    // Bar rengi "bg-green-500" ise (Tamamlandı rengi), kilitli görseli göster.
+    // Not: Bu basit bir kontrol, daha sağlam olması için itemData içine 'status' geçilebilir.
+    // Ancak `GanttRightPanel.tsx` dosyasında `STATUS_COLORS['Tamamlandı']` kullandığımız için
+    // class ismi tutarlı olacaktır.
+    const isCompleted = barData?.colorClass.includes('bg-green-500');
+
+    // Tamamlandıysa 'cursor-not-allowed', değilse 'cursor-grab'
+    const cursorClass = isCompleted ? 'cursor-not-allowed' : 'cursor-grab';
+
     const criticalClass = isCritical 
-        ? 'ring-2 ring-red-500 ring-offset-1 shadow-[0_0_10px_rgba(239,68,68,0.6)] z-[15]' // Z-index artırıldı, kırmızı ring ve shadow eklendi
+        ? 'ring-2 ring-red-500 ring-offset-1 shadow-[0_0_10px_rgba(239,68,68,0.6)] z-[15]' 
         : '';
-    // Helper: Date Badges
+
     const renderDateBadges = (bar: BarTimelineData, top: number) => {
         if (!isDragging) return null;
         if (!bar.startDate || !bar.endDate) return null;
@@ -64,7 +69,7 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
         const formattedStart = format(bar.startDate, 'dd.MM.yyyy');
         const formattedEnd = format(bar.endDate, 'dd.MM.yyyy');
         const badgeOffset = 22;
-        const baseBadgeStyle = "absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold shadow-sm pointer-events-none z-[30]"; // Z-index artırıldı
+        const baseBadgeStyle = "absolute -translate-x-1/2 px-2 py-0.5 rounded bg-gray-800 text-white text-[10px] font-semibold shadow-sm pointer-events-none z-[30]";
 
         return (
             <React.Fragment>
@@ -91,8 +96,8 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                         onMouseEnter={onMouseEnter}
                         onMouseLeave={onMouseLeave}
                         onMouseDown={(e) => onBarMouseDown(e, itemData, barData.timelineColumnId)}
-                        // Z-Index: Normal 11, Aktif 12. Baseline'ın bunun üstüne çıkması için Baseline'a daha yüksek veriyoruz.
-                        className={`rounded text-white text-xs px-2 flex items-center ${criticalClass} overflow-hidden absolute cursor-grab group ${barData.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
+                        // 🔴 ClassName Güncellendi: `cursorClass` eklendi
+                        className={`rounded text-white text-xs px-2 flex items-center ${criticalClass} overflow-hidden absolute ${cursorClass} group ${barData.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
                         style={{
                             ...barData.style,
                             position: 'absolute',
@@ -100,43 +105,42 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                             zIndex: isActive ? 12 : 11,
                             transition: isActive ? 'none' : 'all 150ms ease',
                         }}
-                        title={`${itemData.item.name} (${barData.timelineColumnTitle})`}
+                        title={`${itemData.item.name} (${barData.timelineColumnTitle}) ${isCompleted ? '[KİLİTLİ - TAMAMLANDI]' : ''}`}
                     >
-                        <div
-                            data-resize-handle="start"
-                            onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', barData.timelineColumnId)}
-                            className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 transition-opacity rounded-l"
-                            style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
-                        ></div>
-                        <div
-                            data-resize-handle="end"
-                            onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', barData.timelineColumnId)}
-                            className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 transition-opacity rounded-r"
-                            style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
-                        ></div>
+                        {/* Resize handle'ları sadece tamamlanmamışsa göster */}
+                        {!isCompleted && (
+                            <>
+                                <div
+                                    data-resize-handle="start"
+                                    onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', barData.timelineColumnId)}
+                                    className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 transition-opacity rounded-l"
+                                    style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
+                                ></div>
+                                <div
+                                    data-resize-handle="end"
+                                    onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', barData.timelineColumnId)}
+                                    className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 transition-opacity rounded-r"
+                                    style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}
+                                ></div>
+                            </>
+                        )}
                     </div>
                     {renderDateBadges(barData, baseTop + GANTT_BAR_TOP_OFFSET_PX)}
                 </React.Fragment>
             )}
 
             {/* 0. TEMEL ÇİZGİ (BASELINE) */}
-            {/* Ana barın ÜZERİNDE ince siyah/gri bir çizgi olarak görünür */}
-            {/* 0. TEMEL ÇİZGİ (BASELINE) */}
             {baselineBarData && (
                 <div
                     className="absolute rounded-full pointer-events-none border border-gray-600 shadow-sm"
                     style={{
                         left: `${baselineBarData.startX}px`,
-                        // DEĞİŞİKLİK BURADA: 2 yerine MIN_BASELINE_WIDTH_PX kullanıyoruz
                         width: `${Math.max(MIN_BASELINE_WIDTH_PX, baselineBarData.endX - baselineBarData.startX)}px`,
-
-                        // Barın tam ortasından geçecek şekilde konumlandırıldı
                         top: `${baseTop + GANTT_BAR_TOP_OFFSET_PX + BASELINE_CENTER_OFFSET}px`,
                         height: `${BASELINE_HEIGHT_PX}px`,
                         zIndex: 12,
                         backgroundColor: '#4e3694ff',
                         opacity: 0.85,
-                        // Görünürlüğü artırmak için min-width de ekleyebilirsiniz (opsiyonel, yukarıdaki width zaten halleder)
                         minWidth: `${MIN_BASELINE_WIDTH_PX}px`
                     }}
                     title={`Temel Çizgi: ${format(baselineBarData.startDate, 'dd MMM')} - ${format(baselineBarData.endDate, 'dd MMM')}`}
@@ -161,13 +165,17 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
             {visualOnlyBars.map((bar, index) => {
                 const copyRowIndex = index + 1;
                 const visualBarTop = (itemData.rowIndex + copyRowIndex) * GANTT_ROW_HEIGHT_PX + GANTT_BAR_TOP_OFFSET_PX;
+                // Kopya barlar için de aynı kontrol (Genellikle kopyalar ana bara bağlıdır)
+                const isCopyCompleted = bar.colorClass.includes('bg-green-500');
+                const copyCursor = isCopyCompleted ? 'cursor-not-allowed' : 'cursor-grab';
+
                 return (
                     <React.Fragment key={`${itemData.item.id}-visual-${index}`}>
                         <div
                             onMouseEnter={onMouseEnter}
                             onMouseLeave={onMouseLeave}
                             onMouseDown={(e) => onBarMouseDown(e, itemData, bar.timelineColumnId)}
-                            className={`rounded text-white text-xs px-2 flex items-center overflow-hidden absolute cursor-grab group ${bar.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
+                            className={`rounded text-white text-xs px-2 flex items-center overflow-hidden absolute ${copyCursor} group ${bar.colorClass} ${isActive ? 'opacity-90 ring-2 ring-blue-500 shadow-lg' : 'hover:opacity-90 transition-opacity duration-150'}`}
                             style={{
                                 ...bar.style,
                                 position: 'absolute',
@@ -176,8 +184,12 @@ const _GanttBarRow: React.FC<GanttBarRowProps> = ({
                                 transition: isActive ? 'none' : 'all 150ms ease',
                             }}
                         >
-                            <div data-resize-handle="start" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', bar.timelineColumnId)} className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-l" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
-                            <div data-resize-handle="end" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', bar.timelineColumnId)} className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-r" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
+                            {!isCopyCompleted && (
+                                <>
+                                    <div data-resize-handle="start" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'start', bar.timelineColumnId)} className="absolute left-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-l" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
+                                    <div data-resize-handle="end" onMouseDown={(e) => onResizeHandleMouseDown(e, itemData, 'end', bar.timelineColumnId)} className="absolute right-0 top-0 bottom-0 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-black bg-opacity-20 hover:bg-opacity-30 rounded-r" style={{ width: `${RESIZE_HANDLE_WIDTH_PX}px`, zIndex: 13 }}></div>
+                                </>
+                            )}
                         </div>
                         {renderDateBadges(bar, visualBarTop)}
                     </React.Fragment>

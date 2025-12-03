@@ -18,6 +18,7 @@ import { useGanttSettings } from '../../hooks/useGanttSettings';
 import { useGanttTimeline } from '../../hooks/useGanttTimeline';
 import { usePanelSync } from '../../hooks/usePanelSync';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { sortItemsHierarchically, type ItemWithDepth } from '../../utils/hierarchyUtils';
 
 const STATUS_OPTIONS_CONFIG = [
     { id: 0, text: 'Yapılıyor', color: '#C2410C' },
@@ -143,26 +144,52 @@ const GanttView: React.FC<GanttViewProps> = ({
     };
 
     const displayData = useMemo(() => {
-        if (!groupByColumnId) {
-            return { groups: allGroups, items: allItems };
+        let processedGroups = allGroups;
+        let processedItems = allItems;
+
+        // 1. Gruplama Filtresi (Varsa)
+        if (groupByColumnId) {
+            const groupingColumn = allColumns.find(c => c.id === groupByColumnId);
+            if (groupingColumn && groupingColumn.type === ColumnType.Status) {
+                processedGroups = STATUS_OPTIONS_CONFIG.map((config, index) => ({
+                    id: config.id,
+                    title: config.text,
+                    color: config.color,
+                    boardId: boardId,
+                    order: index
+                }));
+                processedItems = allItems.map(item => {
+                    const itemValue = item.itemValues.find(v => v.columnId === groupByColumnId)?.value;
+                    const config = STATUS_CONFIG_MAP.get(itemValue || '') || DEFAULT_STATUS_CONFIG;
+                    return { ...item, groupId: config.id };
+                });
+            }
         }
-        const groupingColumn = allColumns.find(c => c.id === groupByColumnId);
-        if (groupingColumn && groupingColumn.type === ColumnType.Status) {
-            const displayGroups: Group[] = STATUS_OPTIONS_CONFIG.map((config, index) => ({
-                id: config.id,
-                title: config.text,
-                color: config.color,
-                boardId: boardId,
-                order: index
-            }));
-            const displayItems: Item[] = allItems.map(item => {
-                const itemValue = item.itemValues.find(v => v.columnId === groupByColumnId)?.value;
-                const config = STATUS_CONFIG_MAP.get(itemValue || '') || DEFAULT_STATUS_CONFIG;
-                return { ...item, groupId: config.id };
-            });
-            return { groups: displayGroups, items: displayItems };
-        }
-        return { groups: allGroups, items: allItems };
+
+        // 2. HİYERARŞİK SIRALAMA (YENİ ADIM)
+        // Her grup içindeki itemları kendi içinde ağaç yapısına göre sırala
+        // ve düz bir liste haline getir (depth bilgisi ekleyerek).
+
+        // Önce itemları grup ID'sine göre ayır
+        const itemsByGroup: Record<number, Item[]> = {};
+        processedItems.forEach(item => {
+            if (!itemsByGroup[item.groupId]) itemsByGroup[item.groupId] = [];
+            itemsByGroup[item.groupId].push(item);
+        });
+
+        const sortedHierarchicalItems: ItemWithDepth[] = [];
+
+        // Grupların sırasına göre gez
+        processedGroups.forEach(group => {
+            const groupItems = itemsByGroup[group.id] || [];
+            if (groupItems.length > 0) {
+                // Bu grup içindeki itemları hiyerarşik sırala
+                const sortedGroupItems = sortItemsHierarchically(groupItems);
+                sortedHierarchicalItems.push(...sortedGroupItems);
+            }
+        });
+
+        return { groups: processedGroups, items: sortedHierarchicalItems };
     }, [groupByColumnId, allGroups, allItems, allColumns, boardId]);
 
     const selectedItem = useMemo(() => selectedItemId ? allItems.find(i => i.id === selectedItemId) || null : null, [selectedItemId, allItems]);
@@ -202,7 +229,7 @@ const GanttView: React.FC<GanttViewProps> = ({
     }
 
     return (
-        <div className="flex flex-col h-full w-full border border-gray-200 rounded-lg shadow-sm overflow-hidden bg-white relative">
+        <div className="flex flex-col h-full w-full border border-gray-500 rounded-lg shadow-sm overflow-hidden bg-white relative">
             <GanttToolbar
                 scrollToDate={scrollToDate}
                 currentLevel={currentLevel as ViewModeOption}

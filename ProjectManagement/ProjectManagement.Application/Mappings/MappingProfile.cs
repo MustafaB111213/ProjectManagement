@@ -35,6 +35,7 @@ namespace ProjectManagement.Application.Mappings
             CreateMap<CreateItemDto, Item>();
             CreateMap<UpdateItemDto, Item>();
             CreateMap<MoveItemDto, Item>();
+            CreateMap<Item, ItemTreeDto>();
 
             //Column Mappings
             CreateMap<Column, ColumnDto>();

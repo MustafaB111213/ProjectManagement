@@ -131,5 +131,27 @@ namespace ProjectManagement.Api.Controllers
             return NoContent(); // Başarılı taşıma
         }
 
+        // GET /api/boards/{boardId}/items/tree?groupId={groupId}
+        [HttpGet("tree")]
+        [ProducesResponseType(typeof(IEnumerable<ItemTreeDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<IEnumerable<ItemTreeDto>>> GetItemTreeAsync(int boardId, [FromQuery] int groupId)
+        {
+            if (groupId <= 0)
+            {
+                return BadRequest("Geçerli bir groupId belirtmelisiniz.");
+            }
+
+            var tree = await _itemService.GetItemTreeForGroupAsync(boardId, groupId);
+            if (tree == null)
+            {
+                return NotFound($"Grup (ID: {groupId}) veya Pano (ID: {boardId}) bulunamadı.");
+            }
+
+            return Ok(tree);
+        }
+
+
     }
 }

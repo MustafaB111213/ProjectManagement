@@ -5,10 +5,12 @@ import TimelineCell from '../item/TimelineCell';
 import { ColumnType, type Column, type Group, type Item } from '../../types';
 import { FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import { GANTT_ROW_HEIGHT_PX } from '../common/constants';
+// ItemWithDepth tipini import et veya burada cast et
+import { type ItemWithDepth } from '../../utils/hierarchyUtils';
 
 interface GanttLeftPanelProps {
     groups: Group[];
-    items: Item[];
+    items: Item[]; // Aslında ItemWithDepth[] geliyor
     columns: Column[];
     activeTimelineIds: number[];
     collapsedGroupIds: Set<number>;
@@ -21,6 +23,7 @@ interface GanttLeftPanelProps {
 // Sütun genişlikleri
 const TASK_NAME_WIDTH = 300;
 const TIMELINE_WIDTH = 125;
+const INDENT_STEP_PX = 24; // Her derinlik için girinti miktarı
 
 const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
     groups,
@@ -34,14 +37,16 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
     innerRef,
 }) => {
 
-    // Itemleri groupId'a göre grupla
+    // Itemleri groupId'a göre grupla (SIRALAMAYI BOZMADAN)
     const itemsByGroupId = useMemo(() => {
-        const map: Record<number, Item[]> = {};
+        const map: Record<number, ItemWithDepth[]> = {};
         items.forEach(item => {
             if (!map[item.groupId]) map[item.groupId] = [];
-            map[item.groupId].push(item);
+            // Gelen veri zaten sıralı olduğu için push yeterli
+            map[item.groupId].push(item as ItemWithDepth);
         });
-        Object.values(map).forEach(g => g.sort((a, b) => a.order - b.order));
+        // BURADAKİ SORT İŞLEMİNİ KALDIRDIK. 
+        // Object.values(map).forEach(g => g.sort((a, b) => a.order - b.order)); <-- SİLİNDİ
         return map;
     }, [items]);
 
@@ -54,6 +59,23 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
         });
         return map;
     }, [columns, activeTimelineIds]);
+
+    // Subtask Bağlantı Çizgisi (L-Shape) Rendersi
+    const renderHierarchyLine = (depth: number) => {
+        if (depth <= 0) return null;
+        return (
+            <div 
+                className="absolute top-0 bottom-0 border-l-2 border-gray-300"
+                style={{ 
+                    left: `${(depth * INDENT_STEP_PX) - 12}px`, // Konumlandırma ayarı
+                    height: '100%' 
+                }}
+            >
+                {/* L'nin alt çizgisi */}
+                <div className="absolute top-1/2 w-3 border-b-2 border-gray-300" style={{ left: 0 }}></div>
+            </div>
+        );
+    };
 
     return (
         <div className="w-full bg-primary-background h-full overflow-y-hidden">
@@ -90,7 +112,7 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
                             {/* Grup başlığı */}
                             <div
                                 onClick={() => onToggleGroup(group.id)}
-                                className="flex items-center px-3 py-2 text-sm font-semibold cursor-pointer hover:bg-gray-50"
+                                className="flex items-center px-3 py-2 text-sm font-semibold cursor-pointer hover:bg-gray-50 border-b border-gray-100"
                                 style={{ color: group.color, height: `${GANTT_ROW_HEIGHT_PX}px` }}
                             >
                                 <span className="mr-1 flex items-center">{isCollapsed ? <FiChevronRight /> : <FiChevronDown />}</span>
@@ -101,6 +123,7 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
                             {!isCollapsed &&
                                 groupItems.map(item => {
                                     const isHovered = item.id === hoveredItemId;
+                                    const depth = item.depth || 0;
 
                                     // Item’a ait dolu timeline kolonlarını topluyoruz
                                     const validTimelineColumns = activeTimelineIds
@@ -119,17 +142,33 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
                                                     <div
                                                         key={`${item.id}-${index}`}
                                                         onClick={() => onItemClick?.(item.id)}
-                                                        className={`flex items-center border-t border-gray-100 text-sm cursor-pointer ${isHovered ? "bg-gray-200" : "hover:bg-gray-50"}`}
+                                                        className={`flex items-center border-b border-gray-100 text-sm cursor-pointer ${isHovered ? "bg-gray-200" : "hover:bg-gray-50"}`}
                                                         style={{ height: `${GANTT_ROW_HEIGHT_PX}px` }}
                                                     >
 
-                                                        {/* Görev adı hücresi */}
+                                                        {/* Görev adı hücresi (Hiyerarşik) */}
                                                         <div
-                                                            className={`flex items-center sticky left-0 px-3 py-2 border-r border-gray-100 ${bgClass}`}
-                                                            style={{ width: TASK_NAME_WIDTH, minWidth: TASK_NAME_WIDTH, maxWidth: TASK_NAME_WIDTH }}
+                                                            className={`flex items-center sticky left-0 px-3 py-2 border-r border-gray-100 ${bgClass} relative`}
+                                                            style={{ 
+                                                                width: TASK_NAME_WIDTH, 
+                                                                minWidth: TASK_NAME_WIDTH, 
+                                                                maxWidth: TASK_NAME_WIDTH,
+                                                                // İÇERİK İÇİN PADDING (Hiyerarşi)
+                                                                paddingLeft: `${(depth * INDENT_STEP_PX) + 12}px` 
+                                                            }}
                                                         >
+                                                            {/* Görsel Hiyerarşi Çizgileri (Opsiyonel - Table View benzeri) */}
+                                                            {/* {renderHierarchyLine(depth)} */}
+                                                            
+                                                            {/* Alt görev ise bir ikon veya bullet koyabiliriz */}
+                                                            {depth > 0 && (
+                                                                <div className="absolute w-2 h-2 bg-gray-300 rounded-full" 
+                                                                     style={{ left: `${(depth * INDENT_STEP_PX) - 4}px` }} 
+                                                                />
+                                                            )}
+
                                                             <span
-                                                                className={`block truncate max-w-full font-medium text-gray-900`}
+                                                                className={`block truncate max-w-full font-medium ${depth > 0 ? 'text-gray-700' : 'text-gray-900'}`}
                                                                 title={item.name}
                                                             >
                                                                 {item.name}
@@ -138,7 +177,7 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
 
                                                         {/* Timeline hücresi */}
                                                         <div
-                                                            className="border-r border-gray-100 h-full flex items-center"
+                                                            className="border-r border-gray-100 h-full flex items-center justify-center px-2"
                                                             style={{ width: TIMELINE_WIDTH, minWidth: TIMELINE_WIDTH, maxWidth: TIMELINE_WIDTH }}
                                                         >
                                                             {columnForRow ? (
@@ -148,7 +187,7 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
                                                             )}
                                                         </div>
 
-                                                        {/* Boş bölge */}
+                                                        {/* Boş bölge (Geri kalan genişlik) */}
                                                         <div className="flex-1 h-full" />
                                                     </div>
                                                 );

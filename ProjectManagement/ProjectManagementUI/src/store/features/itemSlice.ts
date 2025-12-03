@@ -1,7 +1,5 @@
-// src/store/features/itemSlice.ts
-
 import { createSlice, createAsyncThunk, createSelector, type PayloadAction } from '@reduxjs/toolkit';
-import type { Item, ItemValue } from '../../types';
+import type { Item, ItemTree, ItemValue } from '../../types';
 import type { RootState } from '../store';
 import { API_BASE_URL } from '../../components/common/constants';
 import { calculateStatusChangeEffects } from '../../utils/automationLogic';
@@ -10,12 +8,14 @@ import { calculateStatusChangeEffects } from '../../utils/automationLogic';
 
 interface ItemState {
     itemsByGroup: Record<number, Item[]>;
+    itemTreeByGroup: Record<number, ItemTree[]>;
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
     error: string | null;
 }
 
 const initialState: ItemState = {
     itemsByGroup: {},
+    itemTreeByGroup: {},
     status: 'idle',
     error: null,
 };
@@ -39,11 +39,59 @@ export const selectAllItemsFlat = createSelector(
     (itemsByGroup) => Object.values(itemsByGroup).flat()
 );
 
+// --- KÜÇÜK YARDIMCI: TREE İÇİNDE HÜCRE GÜNCELLEME ---
+
+function updateItemValueInTreeMap(
+    treeMap: Record<number, ItemTree[]>,
+    value: ItemValue
+) {
+    const { itemId, columnId } = value;
+
+    for (const groupId in treeMap) {
+        const roots = treeMap[groupId];
+        const stack: ItemTree[] = [...roots];
+
+        while (stack.length > 0) {
+            const node = stack.pop()!;
+
+            if (node.id === itemId) {
+                if (!node.itemValues) node.itemValues = [];
+
+                const idx = node.itemValues.findIndex(iv => iv.columnId === columnId);
+                if (idx > -1) {
+                    node.itemValues[idx] = value;
+                } else {
+                    node.itemValues.push(value);
+                }
+                stack.length = 0;
+                break;
+            }
+
+            if (node.children && node.children.length > 0) {
+                stack.push(...node.children);
+            }
+        }
+    }
+}
+
+function updateItemValueInTreeMapShallow(
+    treeMap: Record<number, ItemTree[]>,
+    update: { itemId: number; columnId: number; value: string }
+) {
+    const synthetic: ItemValue = {
+        id: 0,
+        itemId: update.itemId,
+        columnId: update.columnId,
+        value: update.value
+    };
+    updateItemValueInTreeMap(treeMap, synthetic);
+}
+
 // --- ASYNC THUNKS ---
 
 // 1. Toplu Değer Güncelleme (Otomasyon için kritik)
 export const updateMultipleItemValues = createAsyncThunk<
-    { itemId: number; columnId: number; value: string }[], 
+    { itemId: number; columnId: number; value: string }[],
     BulkUpdateItemValueArgs,
     { rejectValue: string }
 >('items/updateMultipleItemValues', async ({ updates }, { rejectWithValue }) => {
@@ -105,25 +153,34 @@ export const fetchItemsForGroup = createAsyncThunk<
 export interface CreateItemArgs {
     boardId: number;
     groupId: number;
-    itemData: { name: string };
+    itemData: { name: string, parentItemId?: number | null; };
 }
 export const createItem = createAsyncThunk<
     Item,
     CreateItemArgs,
     { rejectValue: string }
->('items/createItem', async ({ boardId, groupId, itemData }, { rejectWithValue }) => {
+>('items/createItem', async ({ boardId, groupId, itemData }, { dispatch, rejectWithValue }) => {
     try {
         const res = await fetch(`${API_BASE_URL}/boards/${boardId}/items?groupId=${groupId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(itemData),
         });
+
         if (!res.ok) throw new Error(await res.text());
-        return (await res.json()) as Item;
+
+        const item = (await res.json()) as Item;
+
+        // 🎯 Ağaç güncellensin
+        dispatch(fetchItemTree({ boardId, groupId }));
+
+        return item;
+
     } catch (err: any) {
         return rejectWithValue(err.message || 'Item oluşturulamadı');
     }
 });
+
 
 // 5. Görev Adını Güncelle
 export interface UpdateItemArgs {
@@ -138,7 +195,7 @@ export const updateItem = createAsyncThunk<
     { itemId: number, groupId: number, newName: string },
     UpdateItemArgs,
     { rejectValue: string }
->('items/updateItem', async ({ boardId, itemId, groupId, itemData }, { rejectWithValue }) => {
+>('items/updateItem', async ({ boardId, itemId, groupId, itemData }, { dispatch, rejectWithValue }) => {
     try {
         const response = await fetch(`${API_BASE_URL}/boards/${boardId}/items/${itemId}`, {
             method: 'PUT',
@@ -150,6 +207,10 @@ export const updateItem = createAsyncThunk<
             const errorText = await response.text();
             throw new Error(errorText || 'Sunucu hatası');
         }
+
+        // İsim değişince de ağaç güncellensin
+        dispatch(fetchItemTree({ boardId, groupId }));
+
         return { itemId: itemId, groupId: groupId, newName: itemData.name };
 
     } catch (err: any) {
@@ -164,20 +225,41 @@ export interface DeleteItemArgs {
     groupId: number;
 }
 export const deleteItem = createAsyncThunk<
-    number, 
+    number,
     DeleteItemArgs,
     { rejectValue: string }
->('items/deleteItem', async ({ boardId, itemId, groupId }, { rejectWithValue }) => {
+>('items/deleteItem', async ({ boardId, itemId, groupId }, { dispatch, rejectWithValue }) => {
     try {
         const res = await fetch(`${API_BASE_URL}/boards/${boardId}/items/${itemId}`, {
             method: 'DELETE',
         });
         if (!res.ok) throw new Error(await res.text());
+
+        // 🎯 silince ağaç da yenilensin
+        dispatch(fetchItemTree({ boardId, groupId }));
+
         return itemId;
+
     } catch (err: any) {
         return rejectWithValue(err.message || 'Item silinemedi');
     }
 });
+
+
+export const fetchItemTree = createAsyncThunk<
+    ItemTree[],
+    { boardId: number; groupId: number }
+>(
+    "items/fetchItemTree",
+    async ({ boardId, groupId }) => {
+        const response = await fetch(
+            `${API_BASE_URL}/boards/${boardId}/items/tree?groupId=${groupId}`
+        );
+        if (!response.ok) throw new Error("Item tree alınamadı");
+
+        return (await response.json()) as ItemTree[];
+    }
+);
 
 // 7. Item taşı (API Çağrısı)
 export interface MoveItemArgs {
@@ -187,22 +269,37 @@ export interface MoveItemArgs {
     destinationIndex: number;
     sourceGroupId: number;
     sourceIndex: number;
+    parentItemId?: number | null; 
 }
+
 export const moveItem = createAsyncThunk<void, MoveItemArgs, { rejectValue: string }>(
     'items/moveItem',
-    async ({ boardId, itemId, destinationGroupId, destinationIndex }, { rejectWithValue }) => {
+    async (
+        { boardId, itemId, destinationGroupId, destinationIndex, parentItemId },
+        { rejectWithValue }
+    ) => {
         try {
             const res = await fetch(`${API_BASE_URL}/boards/${boardId}/items/move`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ itemId, destinationGroupId, destinationIndex }),
+                body: JSON.stringify({
+                    itemId,
+                    destinationGroupId,
+                    destinationIndex,
+                    parentItemId: parentItemId ?? null
+                }),
             });
+
             if (!res.ok) throw new Error(await res.text());
         } catch (err: any) {
             return rejectWithValue(err.message || 'Item taşınamadı');
         }
     }
 );
+
+
+
+
 
 // 8. Tek Hücre Değeri Güncelle
 export interface UpdateItemValueArgs {
@@ -234,13 +331,13 @@ export const changeItemStatus = createAsyncThunk<
     { itemId: number, columnId: number, newStatus: string },
     { state: RootState }
 >('items/changeItemStatus', async ({ itemId, columnId, newStatus }, { dispatch, getState }) => {
-    
+
     const state = getState();
-    
+
     // Verileri Topla
     const allItems = Object.values(state.items.itemsByGroup).flat();
     const allColumns = state.columns.items;
-    const allGroups = state.groups.items; // GroupSlice yapınıza göre burası değişebilir
+    const allGroups = state.groups.items;
 
     // Otomasyonu Çalıştır
     const result = calculateStatusChangeEffects(
@@ -251,12 +348,12 @@ export const changeItemStatus = createAsyncThunk<
         allGroups
     );
 
-    // A. Hücre Güncellemelerini Uygula (Statü, Tarih, Unblocking)
+    // A. Hücre Güncellemelerini Uygula
     if (result.updates.length > 0) {
         await dispatch(updateMultipleItemValues({ updates: result.updates }));
     }
 
-    // B. Taşıma İşlemini Uygula (Otomatik olarak "Tamamlananlar" grubuna)
+    // B. Taşıma İşlemini Uygula
     if (result.moveAction) {
         const currentItem = allItems.find(i => i.id === itemId);
         if (currentItem) {
@@ -266,21 +363,16 @@ export const changeItemStatus = createAsyncThunk<
                 sourceGroupId: currentItem.groupId,
                 sourceIndex: currentItem.order,
                 destinationGroupId: result.moveAction.targetGroupId,
-                destinationIndex: 0 // En tepeye ekle
+                destinationIndex: 0
             };
 
-            // Önce UI'ı güncelle (Hız hissi için)
             dispatch(itemSlice.actions.reorderItemsLocally(moveArgs));
-            
-            // Sonra Backend'e bildir
             await dispatch(moveItem(moveArgs));
         }
     }
 
-    // C. Bildirim Göster (Opsiyonel)
     if (result.notification) {
         console.log("🔔 BİLDİRİM:", result.notification);
-        // İsterseniz burada bir Toast dispatch edebilirsiniz
     }
 });
 
@@ -289,63 +381,57 @@ export const changeItemStatus = createAsyncThunk<
 const itemSlice = createSlice({
     name: 'items',
     initialState,
-    // --- SENKRON REDUCER'LAR ---
     reducers: {
         reorderItemsLocally: (state, action: PayloadAction<MoveItemArgs>) => {
             const {
                 sourceGroupId,
-                sourceIndex,
                 destinationGroupId,
-                destinationIndex,
-                itemId
+                destinationIndex, 
+                itemId,
+                parentItemId
             } = action.payload;
 
-            // 1. Kaynak Grubu Kontrol Et
+            // 1. Kaynak ve Hedef Listeleri Bul
             const sourceList = state.itemsByGroup[sourceGroupId];
-            if (!sourceList) {
-                console.error(`reorderItemsLocally: Kaynak grup (ID: ${sourceGroupId}) bulunamadı.`);
+            if (!sourceList) return;
+
+            // Farklı gruba taşınıyorsa hedef listeyi hazırla
+            if (!state.itemsByGroup[destinationGroupId]) {
+                state.itemsByGroup[destinationGroupId] = [];
+            }
+            const destinationList = state.itemsByGroup[destinationGroupId];
+
+            // 2. Öğeyi Bul ve Çıkar (Gerçek indeksi kullan)
+            const itemIndex = sourceList.findIndex(i => i.id === itemId);
+            if (itemIndex === -1) {
+                console.warn(`reorderItemsLocally: Item (ID: ${itemId}) kaynak grupta bulunamadı.`);
                 return;
             }
+            const [movedItem] = sourceList.splice(itemIndex, 1);
 
-            // 2. Item'ı Kaynaktan Çıkar
-            const [itemToMove] = sourceList.splice(sourceIndex, 1);
-
-            // Item ID kontrolü (Senkronizasyon hatası varsa geri koy)
-            if (!itemToMove || itemToMove.id !== itemId) {
-                console.error(`reorderItemsLocally: Item ID eşleşmedi veya bulunamadı.`);
-                if (itemToMove) sourceList.splice(sourceIndex, 0, itemToMove);
-                return;
-            }
-
-            // 3. Hedef Gruba Ekle
-            if (sourceGroupId === destinationGroupId) {
-                // Aynı grup içi sıralama
-                sourceList.splice(destinationIndex, 0, itemToMove);
-                sourceList.forEach((item, index) => item.order = index);
-            }
-            else {
-                // --- DÜZELTME BURADA ---
-                // Hedef grup state'de yoksa (çünkü boş olabilir), onu başlatıyoruz.
-                if (!state.itemsByGroup[destinationGroupId]) {
-                    state.itemsByGroup[destinationGroupId] = [];
+            // 3. Özellikleri Güncelle
+            if (movedItem) {
+                movedItem.groupId = destinationGroupId;
+                // Parent ID güncellemesi
+                if (parentItemId !== undefined) {
+                    (movedItem as any).parentItemId = parentItemId ?? null;
                 }
-                
-                const destinationList = state.itemsByGroup[destinationGroupId];
-                
-                // Item'ın grup bilgisini güncelle
-                itemToMove.groupId = destinationGroupId;
-                
-                // Yeni listeye ekle
-                destinationList.splice(destinationIndex, 0, itemToMove);
-                
-                // Sıralamaları güncelle
-                sourceList.forEach((item, index) => item.order = index);
-                destinationList.forEach((item, index) => item.order = index);
+            } else {
+                return;
+            }
+
+            // 4. Hedef Listeye Ekle
+            destinationList.splice(destinationIndex, 0, movedItem);
+
+            // 5. Sıralama (Order) Değerlerini Yeniden Ata
+            sourceList.forEach((item, index) => { item.order = index; });
+            if (sourceGroupId !== destinationGroupId) {
+                destinationList.forEach((item, index) => { item.order = index; });
             }
         },
-
         clearItems: (state) => {
             state.itemsByGroup = {};
+            state.itemTreeByGroup = {};
             state.status = 'idle';
             state.error = null;
         },
@@ -371,7 +457,6 @@ const itemSlice = createSlice({
                     if (!newMap[i.groupId]) newMap[i.groupId] = [];
                     newMap[i.groupId].push(i);
                 });
-                // Sıralama
                 Object.values(newMap).forEach((list) => list.sort((a, b) => a.order - b.order));
                 s.itemsByGroup = newMap;
                 s.status = 'succeeded';
@@ -425,6 +510,8 @@ const itemSlice = createSlice({
             // --- UPDATE VALUE (SINGLE) ---
             .addCase(updateItemValue.fulfilled, (s, a) => {
                 const v = a.payload;
+
+                // flat liste güncelle
                 for (const g in s.itemsByGroup) {
                     const item = s.itemsByGroup[g].find((i) => i.id === v.itemId);
                     if (item) {
@@ -434,6 +521,9 @@ const itemSlice = createSlice({
                         break;
                     }
                 }
+
+                // 🎯 tree yapısını da güncelle
+                updateItemValueInTreeMap(s.itemTreeByGroup, v);
             })
             .addCase(updateItemValue.rejected, (s, a) => {
                 s.error = a.payload || 'Hücre değeri güncellenemedi';
@@ -442,17 +532,21 @@ const itemSlice = createSlice({
             // --- UPDATE VALUE (MULTIPLE / AUTOMATION) ---
             .addCase(updateMultipleItemValues.fulfilled, (state, action) => {
                 const updates = action.payload;
+
                 updates.forEach(u => {
+                    // flat state
                     for (const groupId in state.itemsByGroup) {
                         const item = state.itemsByGroup[groupId].find(i => i.id === u.itemId);
                         if (item) {
                             const idx = item.itemValues.findIndex(iv => iv.columnId === u.columnId);
-                            // ID'yi 0 geçiyoruz çünkü backend response'unda gerçek ID var ama burada UI güncellemesi yapıyoruz
                             if (idx > -1) item.itemValues[idx].value = u.value;
                             else item.itemValues.push({ id: 0, itemId: u.itemId, columnId: u.columnId, value: u.value });
                             break;
                         }
                     }
+
+                    // 🎯 tree state
+                    updateItemValueInTreeMapShallow(state.itemTreeByGroup, u);
                 });
             })
 
@@ -460,10 +554,25 @@ const itemSlice = createSlice({
             .addCase(moveItem.rejected, (s, a) => {
                 s.error = a.payload || 'Item taşınamadı';
                 console.error("Item taşıma hatası (backend):", a.payload);
-                // İdeal senaryoda burada bir "rollback" mekanizması olmalı
+            })
+
+            .addCase(fetchItemTree.pending, (state) => {
+                state.status = 'loading';
+            })
+            .addCase(fetchItemTree.fulfilled, (state, action) => {
+                const groupId = action.meta.arg.groupId;
+                state.itemTreeByGroup[groupId] = action.payload;
+                state.status = 'succeeded';
+            })
+            .addCase(fetchItemTree.rejected, (state, action) => {
+                state.status = 'failed';
+                state.error = action.error.message || 'Item tree getirilemedi';
             });
+
     },
 });
 
-export const { clearItems, reorderItemsLocally: reorderItems } = itemSlice.actions;
+export const { clearItems, reorderItemsLocally } = itemSlice.actions; 
+export const reorderItems = reorderItemsLocally; // <- YENİ: Bu ek satır, modülün 'reorderItems' export'unu sağlamasını garanti eder.
+
 export default itemSlice.reducer;

@@ -11,6 +11,12 @@ export interface AutomationResult {
     notification?: string;                                          // Bildirim mesajı
 }
 
+// Statülerin "Tamamlandı" sayılıp sayılmayacağını kontrol eden yardımcı
+const isStatusCompleted = (status: string) => {
+    const s = status.toLowerCase();
+    return s === 'tamamlandı' || s === 'done' || s === 'bitti' || s === 'completed';
+};
+
 export const calculateStatusChangeEffects = (
     itemId: number,
     newStatus: string,
@@ -43,6 +49,71 @@ export const calculateStatusChangeEffects = (
 
     const isCompleted = newStatus === 'Tamamlandı' || newStatus === 'Done' || newStatus === 'Bitti';
 
+    const isNewStatusCompleted = isStatusCompleted(newStatus);
+
+    // ==================================================================================
+    // SENARYO A: YUKARIDAN AŞAĞIYA (Ebeveyn Tamamlandıysa -> Çocukları da Tamamla)
+    // ==================================================================================
+    if (isNewStatusCompleted) {
+        // Bu görevin çocuklarını bul (Recursive değil, sadece 1 alt seviye. İstersen recursive yapabilirsin)
+        const children = items.filter(i => i.parentItemId === itemId);
+
+        children.forEach(child => {
+            // Çocuğun mevcut statüsünü bul
+            const currentChildStatus = child.itemValues.find(v => v.columnId === statusColumn.id)?.value || '';
+
+            // Eğer çocuk zaten tamamlanmadıysa, güncelle
+            if (!isStatusCompleted(currentChildStatus)) {
+                updates.push({
+                    itemId: child.id,
+                    columnId: statusColumn.id,
+                    value: newStatus // Ebeveynin statüsü neyse aynısını bas (örn: "Tamamlandı")
+                });
+                console.log(`⬇️ Alt Görev Güncellendi: ${child.name} -> ${newStatus}`);
+            }
+        });
+    }
+
+    // ==================================================================================
+    // SENARYO B: AŞAĞIDAN YUKARIYA (Tüm Çocuklar Tamamlandıysa -> Ebeveyni Tamamla)
+    // ==================================================================================
+    const currentItem = items.find(i => i.id === itemId);
+    if (currentItem && currentItem.parentItemId) {
+        // Ebeveyni bul
+        const parent = items.find(i => i.id === currentItem.parentItemId);
+
+        if (parent) {
+            // Ebeveynin TÜM çocuklarını bul (Kardeşler + Ben)
+            const siblings = items.filter(i => i.parentItemId === parent.id);
+
+            // Hepsi tamamlandı mı kontrol et?
+            // DİKKAT: 'siblings' içinde 'currentItem' da var ama onun statüsü state'te henüz ESKİ haliyle duruyor.
+            // Bu yüzden kontrol ederken "Eğer sibling == currentItem ise newStatus'u, değilse mevcut statüyü" baz almalıyız.
+
+            const allSiblingsCompleted = siblings.every(sibling => {
+                if (sibling.id === itemId) {
+                    return isNewStatusCompleted;
+                }
+                const sStatus = sibling.itemValues.find(v => v.columnId === statusColumn.id)?.value || '';
+                return isStatusCompleted(sStatus);
+            });
+
+            if (allSiblingsCompleted) {
+                // Ebeveyn zaten tamamlandı değilse güncelle
+                const parentStatus = parent.itemValues.find(v => v.columnId === statusColumn.id)?.value || '';
+                if (!isStatusCompleted(parentStatus)) {
+                    updates.push({
+                        itemId: parent.id,
+                        columnId: statusColumn.id,
+                        value: 'Tamamlandı' // Varsayılan tamamlandı metni
+                    });
+                    console.log(`⬆️ Ebeveyn Görev Tamamlandı: ${parent.name}`);
+                    notification = `Tüm alt görevler bittiği için "${parent.name}" tamamlandı.`;
+                }
+            }
+        }
+    }
+    
     if (isCompleted) {
         // --- SENARYO 1: GERÇEKLEŞEN BİTİŞ TARİHİ ---
         if (actualDateColumn) {

@@ -50,6 +50,18 @@ export const useGanttDragResize = ({
 
     const dragThreshold = 5;
 
+    // YARDIMCI: Bir item'ın tamamlanıp tamamlanmadığını kontrol et
+    const isItemCompleted = (item: Item): boolean => {
+        const statusColumn = columns.find(c => c.type === ColumnType.Status);
+        if (!statusColumn) return false;
+
+        const val = item.itemValues.find(v => v.columnId === statusColumn.id)?.value;
+        // Buraya kendi "Tamamlandı" statü metinlerini ekleyebilirsin
+        const completedStatuses = ['Tamamlandı', 'Done', 'Bitti', 'Completed'];
+        
+        return completedStatuses.includes(val || '');
+    };
+
     const getDatesFromItem = (item: Item, timelineColumnId: number): { startDate: Date, endDate: Date } | null => {
         const value = item.itemValues.find(v => v.columnId === timelineColumnId)?.value;
         if (!value) return null;
@@ -64,6 +76,7 @@ export const useGanttDragResize = ({
         }
     };
 
+    // --- BAR SÜRÜKLEME BAŞLANGICI ---
     const handleMouseDownOnBar = useCallback((
         event: React.MouseEvent,
         itemData: ProcessedItemData,
@@ -74,6 +87,12 @@ export const useGanttDragResize = ({
 
         const item = items.find(i => i.id === itemData.item.id);
         if (!item) return;
+
+        // 🔴 KİLİT KONTROLÜ: Eğer tamamlandıysa işlemi durdur
+        if (isItemCompleted(item)) {
+            alert("Bu öge tamamlanmıştır, hareket ettirilemez.");
+            return;
+        }
 
         const dates = getDatesFromItem(item, timelineColumnId);
         if (!dates) return;
@@ -91,8 +110,9 @@ export const useGanttDragResize = ({
             isClickEvent: true,
         });
 
-    }, [items, onDragStart]);
+    }, [items, onDragStart, columns]); // columns dependency eklendi
 
+    // --- BAR YENİDEN BOYUTLANDIRMA BAŞLANGICI ---
     const handleMouseDownOnResizeHandle = useCallback((
         event: React.MouseEvent,
         itemData: ProcessedItemData,
@@ -105,6 +125,12 @@ export const useGanttDragResize = ({
 
         const item = items.find(i => i.id === itemData.item.id);
         if (!item) return;
+
+        // 🔴 KİLİT KONTROLÜ: Tamamlandıysa resize yapma
+        if (isItemCompleted(item)) {
+            alert("Bu öge tamamlanmıştır, süresi değiştirilemez.");
+            return;
+        }
 
         const dates = getDatesFromItem(item, timelineColumnId);
         if (!dates) return;
@@ -121,7 +147,7 @@ export const useGanttDragResize = ({
             side: side,
             isClickEvent: false,
         });
-    }, [items, onDragStart]);
+    }, [items, onDragStart, columns]); // columns dependency eklendi
 
     const handlePaneMouseMove = useCallback((event: MouseEvent) => {
         if (!dragState) return;
@@ -189,7 +215,6 @@ export const useGanttDragResize = ({
             const dependencyColumn = columns.find(c => c.type === ColumnType.Dependency);
             let currentMode = DependencyAction.Ignore;
 
-            // Types.ts düzeltildiği için artık hata vermeyecek
             if (dependencyColumn && dependencyColumn.settings) {
                 try {
                     const settings: ColumnSettings = JSON.parse(dependencyColumn.settings);

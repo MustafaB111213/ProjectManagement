@@ -27,5 +27,9 @@ namespace ProjectManagement.Application.Interfaces
 
         // Eski grup içi sıralama metodu (MoveItemAsync'i çağırabilir veya kaldırılabilir)
         // Task<bool> ReorderItemsAsync(int boardId, int groupId, ReorderItemsDto reorderItemsDto);
+
+        // Belirli bir gruba ait item'ları ağaç yapısında döndürür
+        Task<IEnumerable<ItemTreeDto>?> GetItemTreeForGroupAsync(int boardId, int groupId);
+
     }
 }

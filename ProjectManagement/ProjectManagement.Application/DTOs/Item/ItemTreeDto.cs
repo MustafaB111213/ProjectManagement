@@ -2,16 +2,14 @@
 
 namespace ProjectManagement.Application.DTOs.Item
 {
-    public class ItemDto : ItemForManipulationDto
+    public class ItemTreeDto : ItemForManipulationDto
     {
         public int Id { get; set; }
         public int GroupId { get; set; }
-
-        // Alt görev desteği
+        public int Order { get; set; }
         public int? ParentItemId { get; set; }
 
-        // Bu item'a ait tüm değerleri içerir.
-        public ICollection<ItemValueDto> ItemValues { get; set; }
+        public List<ItemValueDto> ItemValues { get; set; } = new();
+        public List<ItemTreeDto> Children { get; set; } = new();
     }
-
 }

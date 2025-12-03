@@ -12,15 +12,17 @@ namespace ProjectManagement.Application.Services
     {
         private readonly IItemRepository _itemRepository;
         private readonly IGroupRepository _groupRepository; // Grup varlığını kontrol etmek için
+        private readonly IBoardRepository _boardRepository;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context; // Transaction ve bazı sorgular için
 
-        public ItemService(IItemRepository itemRepository, IMapper mapper, IGroupRepository groupRepository, AppDbContext context)
+        public ItemService(IItemRepository itemRepository, IMapper mapper, IGroupRepository groupRepository, AppDbContext context, IBoardRepository boardRepository)
         {
             _itemRepository = itemRepository;
             _mapper = mapper;
             _groupRepository = groupRepository;
             _context = context;
+            _boardRepository = boardRepository;
         }
 
         // Belirli bir gruba ait tüm item'ları getirir
@@ -41,11 +43,12 @@ namespace ProjectManagement.Application.Services
         public async Task<IEnumerable<ItemDto>?> GetAllItemsForBoardAsync(int boardId)
         {
             // Pano var mı kontrol et (BoardRepository üzerinden)
-            var boardExists = await _context.Boards.AnyAsync(b => b.Id == boardId);
-            if (!boardExists)
+            var board = await _boardRepository.GetByIdAsync(boardId);
+            if (board == null)
             {
-                return null; // Pano bulunamadı
+                return null;
             }
+                
             var items = await _itemRepository.GetAllByBoardIdAsync(boardId);
             return _mapper.Map<IEnumerable<ItemDto>>(items);
         }
@@ -66,60 +69,137 @@ namespace ProjectManagement.Application.Services
         // Belirli bir grup için yeni bir item oluşturur
         public async Task<ItemDto?> CreateItemAsync(int boardId, int groupId, CreateItemDto createItemDto)
         {
-            // Grup var mı ve doğru panoda mı kontrol et
+            // 1) Grup var mı ve doğru panoda mı kontrol et
             var group = await _groupRepository.GetByIdAsync(boardId, groupId);
             if (group == null)
             {
                 return null; // Grup bulunamadı veya yetkisiz erişim
             }
 
+            // 2) Eğer ParentItemId doluysa, parent'ı doğrula
+            if (createItemDto.ParentItemId.HasValue)
+            {
+                var parentItem = await _itemRepository.GetByIdWithIncludesAsync(createItemDto.ParentItemId.Value);
+
+                // Parent yoksa veya yanlış board/grup ise hata say
+                if (parentItem == null ||
+                    parentItem.Group == null ||
+                    parentItem.Group.BoardId != boardId ||
+                    parentItem.GroupId != groupId)
+                {
+                    // Şimdilik basitçe null döndürüyoruz (404 gibi davranacak)
+                    return null;
+                }
+            }
+
+            // 3) DTO'yu entity'ye map et
             var createdItemEntity = _mapper.Map<Item>(createItemDto);
-            createdItemEntity.GroupId = groupId; // GroupId'yi ata
 
-            // Yeni item için doğru Order değerini hesapla
+            // Güvenlik için GroupId'yi backend belirlesin
+            createdItemEntity.GroupId = groupId;
+
+            // 4) Sıra hesaplaması (eski davranışın aynısı)
             int maxOrder = await _itemRepository.GetMaxOrderAsync(groupId);
-            createdItemEntity.Order = maxOrder + 1; // Yeni item'ı grubun sonuna ekle
+            createdItemEntity.Order = maxOrder + 1;
 
+            // 5) Kaydet
             await _itemRepository.AddAsync(createdItemEntity);
-            await _itemRepository.SaveChangesAsync(); // Değişiklikleri kaydet
+            await _itemRepository.SaveChangesAsync();
 
-            // Kaydedilen item'ı (ID'si ile birlikte) DTO'ya map edip döndür
+            // 6) DTO olarak geri döndür
             return _mapper.Map<ItemDto>(createdItemEntity);
         }
+
 
         // Belirli bir item'ı günceller
         public async Task<bool> UpdateItemAsync(int boardId, int itemId, UpdateItemDto updateItemDto)
         {
-            // Item'ı bul (Group dahil) ve BoardId kontrolü yap
+            // 1) Item'ı bul (Group dahil) ve BoardId kontrolü yap
             var existingItem = await _itemRepository.GetByIdWithIncludesAsync(itemId);
             if (existingItem == null || existingItem.Group?.BoardId != boardId)
             {
                 return false; // Item bulunamadı veya yetkisiz erişim
             }
 
-            // DTO'daki verileri mevcut entity üzerine işle (Mapper bunu yapmalı)
-            // Dikkat: Mapper konfigürasyonunda GroupId gibi alanların map edilmediğinden emin ol!
+            // 2) ParentItemId değişecekse kontrol et
+            if (updateItemDto.ParentItemId.HasValue)
+            {
+                // Kendini kendine parent yapma
+                if (updateItemDto.ParentItemId.Value == itemId)
+                {
+                    return false;
+                }
+
+                var parentItem = await _itemRepository.GetByIdWithIncludesAsync(updateItemDto.ParentItemId.Value);
+
+                if (parentItem == null ||
+                    parentItem.Group == null ||
+                    parentItem.Group.BoardId != boardId ||
+                    parentItem.GroupId != existingItem.GroupId)
+                {
+                    // Farklı board veya farklı group'a parent atanamaz
+                    return false;
+                }
+
+                // (İstersen burada döngü oluşmaması için yukarı doğru zinciri kontrol eden ek bir logic de yazabiliriz)
+            }
+
+            // 3) DTO'daki verileri mevcut entity üzerine işle
             _mapper.Map(updateItemDto, existingItem);
 
-            // _itemRepository.Update(existingItem); // GenericRepository Update'i zaten Context'e ekler
-            await _itemRepository.SaveChangesAsync(); // Değişiklikleri kaydet
+            await _itemRepository.SaveChangesAsync();
             return true;
         }
+
 
         // Belirli bir item'ı siler
         public async Task<bool> DeleteItemAsync(int boardId, int itemId)
         {
-            // Item'ı bul (Group dahil) ve BoardId kontrolü yap
-            var itemToDelete = await _itemRepository.GetByIdWithIncludesAsync(itemId);
-            if (itemToDelete == null || itemToDelete.Group?.BoardId != boardId)
+            // 1. Önce silinecek öğeyi ÇOCUKLARIYLA BERABER (Include) getiriyoruz.
+            // ClientCascade'in çalışması için EF Core'un çocuklardan haberdar olması ŞARTTIR.
+            var itemToDelete = await _context.Items
+                                             .Include(i => i.Children) // <--- KRİTİK NOKTA BURASI
+                                             .FirstOrDefaultAsync(i => i.Id == itemId);
+
+            // Item bulunamadıysa veya başka bir board'a aitse (güvenlik)
+            if (itemToDelete == null || itemToDelete.GroupId != 0 && itemToDelete.Group?.BoardId != boardId) // GroupId kontrolünü kendi yapına göre uyarla
             {
-                return false; // Item bulunamadı veya yetkisiz erişim
+                // Not: Burada Include(i => i.Group) yapmadığımız için Group null gelebilir, 
+                // BoardId kontrolü için Group'u da include etmen gerekebilir:
+                // .Include(i => i.Group)
+
+                // Basitçe null kontrolü yapıp false dönelim:
+                if (itemToDelete == null) return false;
             }
 
-            _itemRepository.Delete(itemToDelete); // Silme işlemini işaretle
-            await _itemRepository.SaveChangesAsync(); // Değişiklikleri kaydet
+            // --- DERİN HİYERARŞİ VARSA (Torunlar) ---
+            // Eğer alt görevlerin de alt görevleri varsa (3. seviye), onları da yüklememiz gerekir.
+            // EF Core standart Include sadece 1 seviye iner. 
+            // Tüm ağacı silmek için "Load" metodu ile recursive yükleme yapabiliriz:
+            await LoadChildrenRecursively(itemToDelete);
 
+            // 2. Şimdi siliyoruz. EF Core çocukların yüklü olduğunu gördüğü için
+            // arka planda önce onları silecek, sonra babayı silecek.
+            _context.Items.Remove(itemToDelete);
+
+            await _context.SaveChangesAsync();
             return true;
+        }
+
+        // Yardımcı Metot: Alt görevlerin alt görevlerini de yükler
+        private async Task LoadChildrenRecursively(Item item)
+        {
+            if (item.Children != null && item.Children.Any())
+            {
+                foreach (var child in item.Children)
+                {
+                    await _context.Entry(child)
+                                  .Collection(c => c.Children)
+                                  .LoadAsync();
+
+                    await LoadChildrenRecursively(child);
+                }
+            }
         }
 
         // Bir item'ı taşır (grup içi veya gruplar arası)
@@ -175,11 +255,39 @@ namespace ProjectManagement.Application.Services
                                                     .OrderBy(i => i.Order)
                                                     .ToListAsync();
 
-                // 5. Item'ın GroupId'sini güncelle (EĞER farklıysa)
-                if (sourceGroupId != destinationGroupId)
+                // 5. ParentItemId'yi gelen dto'ya göre ayarla (alt görev / üst seviye)
+                int? newParentId = moveItemDto.ParentItemId;
+
+                if (newParentId.HasValue)
                 {
-                    itemToMove.GroupId = destinationGroupId;
+                    // Kendini kendine parent yapma
+                    if (newParentId.Value == itemToMove.Id)
+                    {
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+
+                    var parentItem = await _context.Items
+                        .Include(i => i.Group)
+                        .FirstOrDefaultAsync(i => i.Id == newParentId.Value);
+
+                    if (parentItem == null ||
+                        parentItem.Group == null ||
+                        parentItem.Group.BoardId != boardId ||
+                        parentItem.GroupId != destinationGroupId)  // 👈 parent aynı grupta olmalı
+                    {
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+
+                    // (İstersen burada parentItem'ın yukarısındaki zincirde döngü var mı diye kontrol ekleyebilirsin)
                 }
+
+                // 6. Item'ın GroupId ve ParentItemId'sini güncelle
+                itemToMove.GroupId = destinationGroupId;
+                itemToMove.ParentItemId = newParentId;
+
+
 
                 // 6. Item'ı hedef listeye doğru index'e ekle
                 int finalIndex = Math.Max(0, Math.Min(moveItemDto.DestinationIndex, destinationGroupItems.Count));
@@ -209,7 +317,41 @@ namespace ProjectManagement.Application.Services
                 return false; // İşlem başarısız
             }
         }
+        // Belirli bir gruba ait item'ları ağaç yapısında döndürür
+        public async Task<IEnumerable<ItemTreeDto>?> GetItemTreeForGroupAsync(int boardId, int groupId)
+        {
+            // 1) Grup var mı ve doğru panoda mı kontrol et
+            var group = await _groupRepository.GetByIdAsync(boardId, groupId);
+            if (group == null)
+            {
+                return null; // Grup yoksa veya bu board'a ait değilse
+            }
 
-        
+            // 2) İlgili gruptaki tüm item'ları çek (şu an zaten Order'a göre sıralanıyor)
+            var items = await _itemRepository.GetAllByGroupIdAsync(groupId);
+
+            // 3) Entity -> DTO map et
+            var itemDtos = _mapper.Map<List<ItemTreeDto>>(items);
+
+            // 4) Id üzerinden hızlı erişim için dictionary oluştur
+            var byId = itemDtos.ToDictionary(i => i.Id);
+
+            // 5) Ağaç yapısını kur
+            foreach (var dto in itemDtos)
+            {
+                if (dto.ParentItemId.HasValue && byId.TryGetValue(dto.ParentItemId.Value, out var parent))
+                {
+                    parent.Children.Add(dto);
+                }
+            }
+
+            // 6) Root (üst seviye) item'ları dön (parent'ı olmayanlar)
+            var roots = itemDtos
+                .Where(i => !i.ParentItemId.HasValue)
+                .ToList();
+
+            return roots;
+        }
+
     }
 }
