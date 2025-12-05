@@ -232,7 +232,7 @@ const GanttView: React.FC<GanttViewProps> = ({
     }
 
     return (
-        <div className="flex flex-col h-full w-full border border-gray-500 rounded-lg shadow-sm overflow-hidden bg-white relative">
+        <div className="flex flex-col h-full w-full border border-gray-200 rounded-lg shadow-sm overflow-hidden bg-white relative">
             <GanttToolbar
                 scrollToDate={scrollToDate}
                 currentLevel={currentLevel as ViewModeOption}

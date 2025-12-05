@@ -60,7 +60,7 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
 
     return (
         // Ana Toolbar - Artık 'justify-between'
-        <div className="flex items-center justify-between p-2 border-b border-gray-500 bg-white">
+        <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-white">
             
             {/* Sol Taraf: Filtreler */}
             <div className="flex items-center gap-x-2">

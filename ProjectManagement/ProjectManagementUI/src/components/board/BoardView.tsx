@@ -323,7 +323,7 @@ const BoardView: React.FC = () => {
 
     return (
         <div className={`flex flex-col ${isGanttView ? 'h-full' : ''}`}>
-            <div className="sticky top-0 z-30 bg-white shadow-sm">
+            <div className="sticky top-0 z-30 bg-white">
                 <div className="px-6 pt-5 pb-2"><BoardHeader /></div>
                 <div className="px-6">
                     <BoardViewTabs

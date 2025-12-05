@@ -60,23 +60,7 @@ const GanttLeftPanel: React.FC<GanttLeftPanelProps> = ({
         return map;
     }, [columns, activeTimelineIds]);
 
-    // Subtask Bağlantı Çizgisi (L-Shape) Rendersi
-    const renderHierarchyLine = (depth: number) => {
-        if (depth <= 0) return null;
-        return (
-            <div 
-                className="absolute top-0 bottom-0 border-l-2 border-gray-300"
-                style={{ 
-                    left: `${(depth * INDENT_STEP_PX) - 12}px`, // Konumlandırma ayarı
-                    height: '100%' 
-                }}
-            >
-                {/* L'nin alt çizgisi */}
-                <div className="absolute top-1/2 w-3 border-b-2 border-gray-300" style={{ left: 0 }}></div>
-            </div>
-        );
-    };
-
+    
     return (
         <div className="w-full bg-primary-background h-full overflow-y-hidden">
 

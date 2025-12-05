@@ -337,7 +337,7 @@ export const calculateCriticalPath = (
 ): Set<number> => {
 
     // --- DEBUG FLAG (Canlıya alırken false yaparsın) ---
-    const DEBUG = true;
+    const DEBUG = false;
 
     if (DEBUG) console.group('🚀 CPM Hesaplama Başladı');
 

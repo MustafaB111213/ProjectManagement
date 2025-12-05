@@ -334,7 +334,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
                         title={interval.name}
                     >
                          {interval.isToday ? (
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-5 bg-blue-600 rounded-full flex items-center justify-center z-10 shadow-sm">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-5 bg-blue-400 rounded-full flex items-center justify-center z-10 shadow-sm">
                                 <span className="text-white text-[10px] font-bold leading-none">{interval.name}</span>
                             </div>
                         ) : (
