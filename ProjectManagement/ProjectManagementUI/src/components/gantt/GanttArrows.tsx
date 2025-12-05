@@ -201,18 +201,18 @@ const GanttArrows: React.FC<GanttArrowsProps> = ({
 
                     let stroke = defaultColor;
                     let marker = "url(#arrowhead-default)";
-                    let strokeWidth = "1.5";
+                    let strokeWidth = "1";
 
                     if (isCritical) {
                         stroke = criticalColor;
                         marker = "url(#arrowhead-critical)";
-                        strokeWidth = "2";
+                        strokeWidth = "1.25";
                     }
 
                     if (isHovered) {
                         stroke = highlightColor;
                         marker = "url(#arrowhead-highlight)";
-                        strokeWidth = "1.5"; // Biraz daha belirgin
+                        strokeWidth = "1"; // Biraz daha belirgin
                     }
 
                     const element = (

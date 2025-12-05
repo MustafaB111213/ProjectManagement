@@ -1,6 +1,6 @@
 // src/utils/ganttDependencies.ts (HATALARI GİDERİLMİŞ VERSİYON)
 
-import { differenceInDays, parseISO, isValid, addDays, differenceInCalendarDays } from 'date-fns';
+import { differenceInDays, parseISO, isValid, addDays, differenceInCalendarDays, addBusinessDays, differenceInBusinessDays, format } from 'date-fns';
 // types.ts dosyanızın yoluna göre '..' sayısını ayarlamanız gerekebilir
 import { type Item, type DependencyLink, type Column, ColumnType } from '../types';
 
@@ -329,175 +329,210 @@ export const calculateCascadingChanges = (
     return updates;
 };
 
-/**
- * MONDAY.COM UYUMLU KRİTİK YOL ALGORİTMASI (Genişletilmiş Tolerans)
- * * Bu algoritma Total Float (Bolluk) mantığını kullanır.
- * Ancak hafta sonları ve gün geçişlerinin zinciri koparmaması için 
- * tolerans aralığı genişletilmiştir (3 Gün).
- */
+// Gerekli importlar (Date-fns vb. varsayılmıştır)
+
 export const calculateCriticalPath = (
-    items: Item[], 
+    items: Item[],
     allColumns: Column[]
 ): Set<number> => {
+
+    // --- DEBUG FLAG (Canlıya alırken false yaparsın) ---
+    const DEBUG = true;
+
+    if (DEBUG) console.group('🚀 CPM Hesaplama Başladı');
+
     const criticalItemIds = new Set<number>();
 
     const timelineColumnId = allColumns.find(c => c.type === ColumnType.Timeline)?.id;
     const dependencyColumnId = allColumns.find(c => c.type === ColumnType.Dependency)?.id;
 
-    if (!timelineColumnId || !dependencyColumnId) return criticalItemIds;
+    if (!timelineColumnId || !dependencyColumnId) {
+        if (DEBUG) console.warn('Kolonlar bulunamadı!');
+        return criticalItemIds;
+    }
 
-    // 1. Veri Yapısını Hazırla
+    // ... Interface Node (Aynı kalıyor) ...
     interface Node {
         id: number;
-        start: Date;     // Date objesi olarak tutuyoruz
-        end: Date;       // Date objesi
-        durationDays: number; 
+        earlyStart: Date;
+        earlyFinish: Date;
+        lateStart: Date | null;
+        lateFinish: Date | null;
+        duration: number;
+        predecessors: { id: number; type: string }[];
         successors: { id: number; type: string }[];
     }
 
     const nodes = new Map<number, Node>();
-    // Projenin en son bitiş tarihini Date objesi olarak tutalım
-    let projectEndDate: Date = new Date(0); 
+    let projectEnd = new Date(0);
 
-    // Node'ları oluştur
-    items.forEach(item => {
-        const tValue = item.itemValues.find(v => v.columnId === timelineColumnId)?.value;
-        if (!tValue) return;
+    // 1) NODE OLUŞTURMA
+    for (const item of items) {
+        // ... (Senin kodundaki parse işlemleri aynı) ...
+        const tVal = item.itemValues.find(v => v.columnId === timelineColumnId)?.value;
+        if (!tVal) continue;
 
-        const [sStr, eStr] = tValue.split('/');
-        if (!sStr || !eStr) return;
-
-        const start = parseISO(sStr);
-        const end = parseISO(eStr);
-
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
-
-        // Projenin en son bitiş zamanını güncelle
-        if (end > projectEndDate) {
-            projectEndDate = end;
+        let startStr, endStr;
+        try {
+            const parsed = JSON.parse(tVal);
+            startStr = parsed.from;
+            endStr = parsed.to;
+        } catch {
+            [startStr, endStr] = tVal.split('/');
         }
 
-        // Duration (Gün bazında +1 ekliyoruz çünkü Gantt'ta başlangıç ve bitiş dahildir)
-        // Örn: 1'inde başlayıp 1'inde biten iş 1 gündür. (1 - 1 = 0 olmamalı)
-        const duration = differenceInCalendarDays(end, start); 
+        const start = parseISO(startStr);
+        const end = parseISO(endStr);
+        if (!isValid(start) || !isValid(end)) continue;
+
+        const duration = differenceInCalendarDays(end, start) + 1;
 
         nodes.set(item.id, {
             id: item.id,
-            start,
-            end,
-            durationDays: duration,
+            earlyStart: start,
+            earlyFinish: end,
+            lateStart: null,
+            lateFinish: null,
+            duration,
+            predecessors: [],
             successors: []
         });
-    });
 
-    // Dependency Bağlarını Kur
-    items.forEach(item => { 
-        const dValue = item.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
-        if (!dValue) return;
+        if (end > projectEnd) projectEnd = end;
+    }
+
+    if (DEBUG) console.log(`📋 Toplam Node Sayısı: ${nodes.size}, İlk Project End: ${format(projectEnd, 'yyyy-MM-dd')}`);
+
+    // 2) BAĞIMLILIKLAR
+    for (const item of items) {
+        // ... (Senin kodundaki link işlemleri aynı) ...
+        const dVal = item.itemValues.find(v => v.columnId === dependencyColumnId)?.value;
+        if (!dVal) continue;
         try {
-            const links: DependencyLink[] = JSON.parse(dValue);
-            links.forEach(link => {
-                const predecessorNode = nodes.get(link.id);
-                if (predecessorNode) {
-                    predecessorNode.successors.push({ id: item.id, type: link.type });
+            const links: DependencyLink[] = JSON.parse(dVal);
+            for (const link of links) {
+                const pred = nodes.get(link.id);
+                const succ = nodes.get(item.id);
+                if (pred && succ) {
+                    pred.successors.push({ id: item.id, type: link.type });
+                    succ.predecessors.push({ id: link.id, type: link.type });
                 }
-            });
-        } catch {}
+            }
+        } catch { }
+    }
+
+    // 3) FORWARD PASS (ES & EF)
+    if (DEBUG) console.groupCollapsed('➡️ Forward Pass Detayları');
+
+    // Sort işlemi kritik: Tarihe göre sıralamak %100 garanti vermez (topological sort daha iyidir) 
+    // ama CPM için genelde yeterlidir.
+    const sortedForward = Array.from(nodes.values()).sort(
+        (a, b) => a.earlyStart.getTime() - b.earlyStart.getTime()
+    );
+
+    for (const node of sortedForward) {
+        if (node.predecessors.length > 0) {
+            let maxEF = new Date(0);
+
+            // Loglama için pred ID'lerini topla
+            const predIds = node.predecessors.map(p => p.id);
+
+            for (const predLink of node.predecessors) {
+                const pred = nodes.get(predLink.id);
+                if (!pred) continue;
+                if (pred.earlyFinish > maxEF) {
+                    maxEF = pred.earlyFinish;
+                }
+            }
+
+            const oldES = node.earlyStart;
+            node.earlyStart = addDays(maxEF, 1);
+            node.earlyFinish = addDays(node.earlyStart, node.duration - 1);
+
+            if (DEBUG && oldES.getTime() !== node.earlyStart.getTime()) {
+                console.log(`Node ${node.id} ötelendi. Preds: [${predIds}]. Yeni ES: ${format(node.earlyStart, 'MM-dd')}`);
+            }
+        }
+    }
+
+    // Proje sonunu güncelle
+    projectEnd = new Date(0);
+    nodes.forEach(node => {
+        if (node.earlyFinish > projectEnd) projectEnd = node.earlyFinish;
     });
 
-    // 2. Backward Pass (Geriye Doğru Hesaplama)
-    const lateFinishMap = new Map<number, Date>();
-    const processingSet = new Set<number>();
+    if (DEBUG) {
+        console.log(`🏁 Forward Pass Sonrası Project End: ${format(projectEnd, 'yyyy-MM-dd')}`);
+        console.groupEnd();
+    }
 
-    const getLateFinish = (nodeId: number): Date => {
-        if (lateFinishMap.has(nodeId)) return lateFinishMap.get(nodeId)!;
-        if (processingSet.has(nodeId)) return projectEndDate;
-        
-        processingSet.add(nodeId);
-        
-        const node = nodes.get(nodeId);
-        if (!node) {
-            processingSet.delete(nodeId);
-            return projectEndDate;
-        }
+    // 4) BACKWARD PASS (LS & LF)
+    if (DEBUG) console.groupCollapsed('⬅️ Backward Pass Detayları');
 
-        // Ardılı yoksa Late Finish = Proje Bitiş Tarihi
+    const sortedBackward = Array.from(nodes.values()).sort(
+        (a, b) => b.earlyFinish.getTime() - a.earlyFinish.getTime()
+    );
+
+    for (const node of sortedBackward) {
+        // Ardıl yoksa veya proje sonundaysa
         if (node.successors.length === 0) {
-            lateFinishMap.set(nodeId, projectEndDate);
-            processingSet.delete(nodeId);
-            return projectEndDate;
+            node.lateFinish = projectEnd;
+            node.lateStart = addDays(projectEnd, -(node.duration - 1));
+            continue;
         }
 
-        // Min Late Finish hesapla
-        // Başlangıçta çok uzak bir tarih atıyoruz
-        let minLateFinish = new Date(8640000000000000); // Max Date
-
-        node.successors.forEach(succ => {
-            const succNode = nodes.get(succ.id);
-            if (!succNode) return;
-
-            const succLF = getLateFinish(succ.id);
-            // Successor Late Start = Successor Late Finish - Duration
-            const succLS = addDays(succLF, -succNode.durationDays);
-
-            let constraintLF = minLateFinish;
-
-            switch (succ.type) {
-                case 'FS': 
-                    // Bizim LF <= Ardıl LS
-                    constraintLF = succLS; 
-                    break;
-                case 'SS': 
-                    // Bizim LF <= Ardıl LS + Duration
-                    constraintLF = addDays(succLS, node.durationDays);
-                    break;
-                case 'FF': 
-                    // Bizim LF <= Ardıl LF
-                    constraintLF = succLF;
-                    break;
-                case 'SF': 
-                    // Bizim LF <= Ardıl LF + Duration
-                    constraintLF = addDays(succLF, node.durationDays);
-                    break;
-                default: 
-                    constraintLF = succLS;
+        let minLS = new Date(8640000000000000);
+        for (const succLink of node.successors) {
+            const succ = nodes.get(succLink.id);
+            if (!succ || succ.lateStart === null) continue;
+            if (succ.lateStart < minLS) {
+                minLS = succ.lateStart;
             }
-
-            if (constraintLF < minLateFinish) {
-                minLateFinish = constraintLF;
-            }
-        });
-
-        // Eğer tarih değişmediyse (constraint yoksa) proje sonunu al
-        if (minLateFinish.getTime() === 8640000000000000) {
-             minLateFinish = projectEndDate;
         }
 
-        lateFinishMap.set(nodeId, minLateFinish);
-        processingSet.delete(nodeId);
-        return minLateFinish;
-    };
+        // Eğer minLS değişmediyse (bütün ardıllar hesaplanamadıysa - nadir durum)
+        if (minLS.getTime() === 8640000000000000) {
+            node.lateFinish = projectEnd; // Fallback
+        } else {
+            node.lateFinish = addDays(minLS, -1);
+        }
 
-    // 3. Float Hesapla ve Tolerans Kontrolü
-    
-    // MONDAY.COM DAVRANIŞI İÇİN KRİTİK AYAR:
-    // Toleransı 3 gün (veya 4 gün) olarak belirliyoruz.
-    // Bu sayede Cuma biten -> Pazartesi başlayan görevler (arada 2 gün boşluk olsa da)
-    // zinciri koparmaz ve kırmızı kalır.
-    const FLOAT_TOLERANCE_DAYS = 3; 
+        node.lateStart = addDays(node.lateFinish, -(node.duration - 1));
+    }
+    if (DEBUG) console.groupEnd();
+
+    // 5) FLOAT HESABI & TABLO GÖRÜNTÜLEME
+    const debugTableData: any[] = [];
 
     nodes.forEach(node => {
-        const lateFinish = getLateFinish(node.id);
-        
-        // Float = Late Finish - Early Finish (Mevcut Bitiş)
-        const floatDays = differenceInCalendarDays(lateFinish, node.end);
-        
-        // Eğer bolluk 3 günden azsa, bu görev kritiktir.
-        // (Haftasonu boşluklarını yutmak için)
-        if (floatDays <= FLOAT_TOLERANCE_DAYS) {
-            criticalItemIds.add(node.id);
+        if (node.lateStart && node.earlyStart) {
+            const float = differenceInDays(node.lateStart, node.earlyStart);
+
+            if (float === 0) {
+                criticalItemIds.add(node.id);
+            }
+
+            if (DEBUG) {
+                debugTableData.push({
+                    ID: node.id,
+                    Duration: node.duration,
+                    ES: format(node.earlyStart, 'yyyy-MM-dd'),
+                    EF: format(node.earlyFinish, 'yyyy-MM-dd'),
+                    LS: node.lateStart ? format(node.lateStart, 'yyyy-MM-dd') : 'N/A',
+                    LF: node.lateFinish ? format(node.lateFinish, 'yyyy-MM-dd') : 'N/A',
+                    FLOAT: float,
+                    CRITICAL: float === 0 ? '🔥 YES' : 'NO',
+                    Preds: node.predecessors.map(p => p.id).join(','),
+                    Succs: node.successors.map(s => s.id).join(',')
+                });
+            }
         }
     });
+
+    if (DEBUG) {
+        console.table(debugTableData);
+        console.groupEnd(); // CPM Bitiş
+    }
 
     return criticalItemIds;
 };

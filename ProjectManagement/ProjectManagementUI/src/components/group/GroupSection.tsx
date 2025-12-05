@@ -151,7 +151,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
         if (selectedBoardId) dispatch(fetchItemTree({ boardId: selectedBoardId, groupId: group.id }));
     }, [selectedBoardId, group.id, dispatch]);
 
-    const gridTemplateColumns = useMemo(() => 
+    const gridTemplateColumns = useMemo(() =>
         `60px minmax(350px, 1fr) ${columns.map(() => '150px').join(' ')} 60px`, 
     [columns]);
 
