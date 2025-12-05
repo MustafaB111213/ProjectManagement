@@ -23,7 +23,6 @@ import {
 } from 'react-icons/fi';
 import { selectShowOnlyCompleted } from '../../store/features/boardViewSlice';
 
-// ... (DropLineIndicator ve SortableColumnHeader aynı kalıyor) ...
 const DropLineIndicator = ({ depth, isActive }: { depth: number, isActive: boolean }) => {
     if (!isActive) return null;
     const leftOffset = 60 + (depth * INDENT_STEP);
@@ -38,7 +37,6 @@ const DropLineIndicator = ({ depth, isActive }: { depth: number, isActive: boole
 };
 
 const SortableColumnHeader = ({ column, groupId, openEdit, deleteCol }: any) => {
-    // ... (Aynı kod) ...
     const uniqueId = `group-${groupId}-column-${column.id}`;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: uniqueId, data: { type: 'COLUMN', column, groupId }
@@ -71,7 +69,12 @@ const GroupSection: React.FC<GroupSectionProps> = ({
     const { selectedBoardId } = useAppSelector(s => s.boards);
     const columns = useAppSelector(s => s.columns.items);
     const showOnlyCompleted = useAppSelector(selectShowOnlyCompleted);
+    
+    // Selectors
     const rawItemTree = useAppSelector(s => s.items.itemTreeByGroup[group.id]);
+    // --- DÜZELTME 1: Status bilgisini çekiyoruz ---
+    const status = useAppSelector(s => s.items.status);
+
     const itemTree: ItemTree[] = rawItemTree ?? [];
 
     // --- YENİ STATE: Alt görevleri kapalı olan itemların ID'leri ---
@@ -91,14 +94,12 @@ const GroupSection: React.FC<GroupSectionProps> = ({
         if (!showOnlyCompleted || !statusColumn) return itemTree;
         const isDone = (node: ItemTree) => {
             const val = node.itemValues?.find(v => v.columnId === statusColumn.id)?.value;
-            // Buradaki kontrol AutomationLogic ile uyumlu olmalı
             const s = val?.toLowerCase() || '';
             return s === 'tamamlandı' || s === 'done' || s === 'bitti';
         };
         const filterNodes = (nodes: ItemTree[]): ItemTree[] => {
             return nodes.reduce<ItemTree[]>((acc, node) => {
                 const children = node.children ? filterNodes(node.children) : [];
-                // Kendisi tamamlanmışsa VEYA altlarında gösterilecek bir şey varsa ekle
                 if (isDone(node) || children.length > 0) acc.push({ ...node, children });
                 return acc;
             }, []);
@@ -106,11 +107,10 @@ const GroupSection: React.FC<GroupSectionProps> = ({
         return filterNodes(itemTree);
     }, [itemTree, showOnlyCompleted, statusColumn]);
 
-    // Toplam görünür öğe sayısı (Kapalı olanların çocuklarını saymamalıyız)
+    // Toplam görünür öğe sayısı
     const totalVisibleItems = useMemo(() => {
         const countNodes = (nodes: ItemTree[]): number => {
             return nodes.reduce((acc, n) => {
-                // Eğer bu item kapalıysa, çocuklarını sayma
                 const childrenCount = (n.children && !collapsedItemIds.has(n.id)) 
                     ? countNodes(n.children) 
                     : 0;
@@ -147,9 +147,19 @@ const GroupSection: React.FC<GroupSectionProps> = ({
         setNewItemName('');
     };
 
+    // --- DÜZELTME 2: Sonsuz Döngü Korumalı useEffect ---
     useEffect(() => {
-        if (selectedBoardId) dispatch(fetchItemTree({ boardId: selectedBoardId, groupId: group.id }));
-    }, [selectedBoardId, group.id, dispatch]);
+        // Eğer board seçili değilse işlem yapma
+        if (!selectedBoardId) return;
+
+        // EĞER:
+        // 1. Bu grup için veri henüz yoksa (!rawItemTree)
+        // 2. VE şu an yükleme yapılmıyorsa (status !== 'loading')
+        // 3. VE daha önce hata almadıysak (status !== 'failed') -> (404 loop'unu kırmak için kritik)
+        if (!rawItemTree && status !== 'loading' && status !== 'failed') {
+            dispatch(fetchItemTree({ boardId: selectedBoardId, groupId: group.id }));
+        }
+    }, [selectedBoardId, group.id, dispatch, rawItemTree, status]);
 
     const gridTemplateColumns = useMemo(() =>
         `60px minmax(350px, 1fr) ${columns.map(() => '150px').join(' ')} 60px`, 
@@ -193,11 +203,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                         <DropLineIndicator depth={projectedDepth} isActive={true} />
                     )}
                     
-                    {/* ItemRow'a gerekli prop'ları geçiyoruz */}
                     <div className="relative">
-                        {/* Aç/Kapa Butonu (ItemRow'un soluna, ismin yanına denk gelecek şekilde ItemRow içinde de yönetilebilir ama burada absolute ile koymak daha kolay olabilir) */}
-                        {/* Not: En temiz yöntem ItemRow'un içinde bu propu karşılamaktır. */}
-                        
                         <ItemRow
                             item={node} 
                             color={group.color} 
@@ -205,7 +211,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                             depth={depth}
                             boardId={selectedBoardId || 0} 
                             gridTemplateColumns={gridTemplateColumns}
-                            // YENİ PROPLAR (ItemRow'a eklenmesi gerekir)
                             hasChildren={hasChildren}
                             isCollapsed={isItemCollapsed}
                             onToggleCollapse={() => toggleItemCollapse(node.id)}
@@ -214,7 +219,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 </div>
             );
 
-            // Eğer alt görevler varsa ve kapalı DEĞİLSE, onları da render et
             if (hasChildren && !isItemCollapsed) {
                 out.push(...renderTree(children, depth + 1));
             }
@@ -234,7 +238,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                         <h3 className="text-base font-semibold truncate cursor-pointer" style={{ color: group.color }} onClick={onToggleCollapse}>{group.title}</h3>
                         <span className="text-xs font-medium text-gray-400">({totalVisibleItems} Görev)</span>
                     </div>
-                    {/* ... (Grup Düzenle/Sil Butonları Aynı) ... */}
                     <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
                         <button onClick={() => setEditModalOpen(true)} className="p-1.5 text-gray-500 hover:text-blue-600"><FiEdit size={14} /></button>
                         <button onClick={() => { if (selectedBoardId && window.confirm(`"${group.title}" silinsin mi?`)) dispatch(deleteGroup({ boardId: selectedBoardId, groupId: group.id })); }} className="p-1.5 text-gray-500 hover:text-red-600"><FiTrash2 size={14} /></button>
@@ -243,7 +246,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
 
                 {!isCollapsed && (
                     <div className="bg-white rounded-lg border border-gray-100 overflow-x-auto shadow-sm">
-                        {/* ... (Header Aynı) ... */}
                         <div className="grid border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase text-gray-500 tracking-wider items-center" style={{ gridTemplateColumns }}>
                             <div className="sticky left-0 z-20 bg-gray-50 px-4 py-2 border-r border-gray-200 h-10" />
                             <div className="sticky z-20 bg-gray-50 px-2 py-2 border-r border-gray-200 h-10 truncate" style={{ left: '60px' }}>Görev Adı</div>
@@ -257,7 +259,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                             </div>
                         </div>
 
-                        {/* --- BODY --- */}
                         <div className="bg-white min-h-[50px]" ref={setDropRef}>
                             {filteredItemTree.length === 0 && showOnlyCompleted ? (
                                 <div className="p-4 text-center text-sm text-gray-400 italic">Bu grupta tamamlanan görev yok.</div>
@@ -268,7 +269,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                             )}
                         </div>
 
-                        {/* ... (Footer Aynı) ... */}
                         <form onSubmit={handleAddItem} className="grid items-center hover:bg-gray-50 transition-colors" style={{ gridTemplateColumns }}>
                             <div className="sticky left-0 z-10 bg-inherit border-t border-r border-gray-200 h-10 flex items-center px-4">
                                 <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: group.color }} />
@@ -284,7 +284,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 )}
             </section>
             
-            {/* ... (Modallar Aynı) ... */}
             {selectedBoardId && (
                 <>
                     <Modal isOpen={isColumnModalOpen} onClose={() => setColumnModalOpen(false)} title="Yeni Sütun Ekle"><AddColumnForm boardId={selectedBoardId} onClose={() => setColumnModalOpen(false)} /></Modal>

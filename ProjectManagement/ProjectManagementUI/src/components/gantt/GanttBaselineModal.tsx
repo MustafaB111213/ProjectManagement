@@ -12,6 +12,7 @@ import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { MAX_ZOOM_INDEX } from '../common/constants';
 import { usePanelSync } from '../../hooks/usePanelSync';
 import { useGanttTimeline } from '../../hooks/useGanttTimeline';
+import { useGanttScroll } from '../../hooks/useGanttScroll';
 
 interface GanttBaselineModalProps {
     isOpen: boolean;
@@ -85,6 +86,8 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
     const modalRightPanelScrollRef = useRef<HTMLDivElement>(null);
     const modalLeftPanelInnerRef = useRef<HTMLDivElement>(null);
 
+    const { scrollEvents } = useGanttScroll(modalRightPanelScrollRef);
+    
     // Modal ilk açıldığında scroll yapılıp yapılmadığını takip et
     const hasInitialScrolled = useRef(false);
 
@@ -229,8 +232,10 @@ const GanttBaselineModal: React.FC<GanttBaselineModalProps> = ({
 
                         <div
                             ref={modalRightPanelScrollRef}
-                            className="flex-1 w-full overflow-x-auto overflow-y-auto min-h-0 pb-12"
+                            className="flex-1 w-full overflow-x-auto overflow-y-auto min-h-0 pb-12 cursor-grab"
                             onScroll={modalHandleScroll}
+                            onMouseDown={scrollEvents.onMouseDown}
+                            style={scrollEvents.style}
                         >
                             <GanttRightPanel
                                 groups={groups}

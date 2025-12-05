@@ -19,6 +19,7 @@ import { useGanttTimeline } from '../../hooks/useGanttTimeline';
 import { usePanelSync } from '../../hooks/usePanelSync';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { sortItemsHierarchically, type ItemWithDepth } from '../../utils/hierarchyUtils';
+import { useGanttScroll } from '../../hooks/useGanttScroll';
 
 const STATUS_OPTIONS_CONFIG = [
     { id: 0, text: 'Yapılıyor', color: '#C2410C' },
@@ -79,6 +80,8 @@ const GanttView: React.FC<GanttViewProps> = ({
     const leftPanelInnerRef = useRef<HTMLDivElement>(null);
     const totalHeightRef = useRef(0);
 
+    const { scrollEvents } = useGanttScroll(rightPanelScrollRef);
+    
     const projectDateRange = useMemo(() => {
         const primaryTimelineId = activeTimelineIds.length > 0 ? activeTimelineIds[0] : null;
         if (!primaryTimelineId || allItems.length === 0) return { minDate: null, maxDate: null };
@@ -276,8 +279,10 @@ const GanttView: React.FC<GanttViewProps> = ({
 
                 <div
                     ref={rightPanelScrollRef}
-                    className="flex-1 w-full overflow-auto"
+                    className="flex-1 w-full overflow-auto cursor-grab"
                     onScroll={handleScroll}
+                    onMouseDown={scrollEvents.onMouseDown}
+                    style={scrollEvents.style}
                 >
                     <GanttRightPanel
                         groups={displayData.groups}
