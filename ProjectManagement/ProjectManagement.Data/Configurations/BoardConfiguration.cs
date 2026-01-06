@@ -1,7 +1,6 @@
 ﻿using ProjectManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using ProjectManagement.Domain.Entities;
 
 namespace ProjectManagement.Data.Configurations
 {

@@ -10,15 +10,11 @@ namespace ProjectManagement.Application.Services
     {
         private readonly IBoardRepository _boardRepository;
         private readonly IMapper _mapper;
-        
-
         public BoardService(IBoardRepository boardRepository, IMapper mapper)
         {
             _boardRepository = boardRepository;
             _mapper = mapper;
-            
         }
-
         public async Task<BoardDto> CreateBoardAsync (CreateBoardDto dto)
         {
             // 1. DTO'yu Entity'ye çevir
